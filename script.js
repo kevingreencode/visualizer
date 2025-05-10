@@ -1052,13 +1052,19 @@ function dragged(event, d) {
 function dragended(event, d) {
     if (!event.active) simulation.alphaTarget(0);
     
-    // Final snap to grid
+    // Keep the node fixed at its final position
     if (snapToGrid) {
+        // Ensure it's properly snapped to grid
         d.x = Math.round(d.x / gridSize) * gridSize;
         d.y = Math.round(d.y / gridSize) * gridSize;
+        // Keep node fixed at the snapped position
+        d.fx = d.x;
+        d.fy = d.y;
+    } else {
+        // Keep node fixed at its last position
+        d.fx = d.x;
+        d.fy = d.y;
     }
     
-    d.fx = null;
-    d.fy = null;
     d.isDragging = false; // Clear the dragging flag
 }
