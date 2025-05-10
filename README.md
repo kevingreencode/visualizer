@@ -2,7 +2,7 @@
 
 A powerful web-based tool for visualizing and interacting with network topology files. This visualizer automatically detects and renders different types of network topologies, including Fat Trees, Binary Trees, and more.
 
-![Network Topology Visualizer](https://placeholder-for-screenshot.png)
+![Network Topology Visualizer](https://raw.githubusercontent.com/kevingreencode/visualizer/refs/heads/main/sample.png)
 
 ## Features
 
