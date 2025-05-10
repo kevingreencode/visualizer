@@ -133,6 +133,14 @@ pre {
 .grid-btn:hover {
     background-color: #7b1fa2;
 }
+
+/* Export buttons */
+#export-png-btn, #export-jpeg-btn {
+    background-color: #f44336;
+}
+#export-png-btn:hover, #export-jpeg-btn:hover {
+    background-color: #d32f2f;
+}
 /* Layout selector */
 #layout-selector {
     padding: 0.5rem;
