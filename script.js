@@ -110,7 +110,7 @@ function createLayoutSelector() {
         { value: 'fattree', text: 'Fat Tree' },
         { value: 'binary', text: 'Binary Tree' },
         { value: 'linear', text: 'Linear' },
-        { value: 'force', text: 'Force-Directed' }
+        { value: 'force', text: 'Ugliness' }
     ];
     
     layouts.forEach(layout => {
