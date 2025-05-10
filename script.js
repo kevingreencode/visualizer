@@ -389,14 +389,22 @@ function initializeSvg() {
     width = container.clientWidth;
     height = container.clientHeight;
     
+    // Create zoom behavior
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 10]) // Allow zooming from 0.1x to 10x
+        .on('zoom', (event) => {
+            svg.select('g').attr('transform', event.transform);
+        });
+    
     svg = d3.select('#graph-container')
         .append('svg')
         .attr('width', '100%')
         .attr('height', '100%')
         .attr('viewBox', [0, 0, width, height])
-        .call(d3.zoom().on('zoom', (event) => {
-            g.attr('transform', event.transform);
-        }));
+        .call(zoom);
+    
+    // Store zoom behavior for later use in resetView
+    svg.zoom = zoom;
     
     // Add a group element for the graph
     const g = svg.append('g');
@@ -943,13 +951,49 @@ function updateTopologyInfo(topology, graph) {
 
 // Reset the view
 function resetView() {
-    if (!simulation) return;
+    if (!svg || !graph) return;
     
-    svg.transition().duration(750).call(
-        d3.zoom().transform,
-        d3.zoomIdentity,
-        d3.zoomTransform(svg.node()).invert([width / 2, height / 2])
-    );
+    // Calculate the bounding box of the graph
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    graph.nodes.forEach(node => {
+        minX = Math.min(minX, node.x || 0);
+        minY = Math.min(minY, node.y || 0);
+        maxX = Math.max(maxX, node.x || 0);
+        maxY = Math.max(maxY, node.y || 0);
+    });
+    
+    // Add padding
+    const padding = 50;
+    minX -= padding;
+    minY -= padding;
+    maxX += padding;
+    maxY += padding;
+    
+    // Calculate the required scale to fit the graph
+    const graphWidth = maxX - minX;
+    const graphHeight = maxY - minY;
+    const containerWidth = width;
+    const containerHeight = height;
+    
+    const scaleX = containerWidth / graphWidth;
+    const scaleY = containerHeight / graphHeight;
+    const scale = Math.min(scaleX, scaleY, 1); // Limit max scale to 1
+    
+    // Calculate the center of the graph
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    
+    // Reset the view to fit the entire graph
+    svg.transition()
+       .duration(750)
+       .call(
+           svg.zoom.transform,
+           d3.zoomIdentity
+             .translate(containerWidth / 2, containerHeight / 2)
+             .scale(scale)
+             .translate(-centerX, -centerY)
+       );
 }
 
 // Drag functions
