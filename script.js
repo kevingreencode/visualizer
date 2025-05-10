@@ -949,51 +949,23 @@ function updateTopologyInfo(topology, graph) {
     propertiesInfo.innerHTML = propertiesHtml;
 }
 
-// Reset the view
+// Reset the view by reloading the current topology
 function resetView() {
-    if (!svg || !graph) return;
+    if (!currentTopology || !graph) return;
     
-    // Calculate the bounding box of the graph
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    // Simply reload the current topology to reset everything
+    loadTopology(currentTopology);
     
-    graph.nodes.forEach(node => {
-        minX = Math.min(minX, node.x || 0);
-        minY = Math.min(minY, node.y || 0);
-        maxX = Math.max(maxX, node.x || 0);
-        maxY = Math.max(maxY, node.y || 0);
-    });
+    // Show a brief visual feedback to indicate the reset
+    const button = document.querySelector('#reset-view-btn button');
+    const originalText = button.textContent;
+    button.style.backgroundColor = '#4CAF50';
     
-    // Add padding
-    const padding = 50;
-    minX -= padding;
-    minY -= padding;
-    maxX += padding;
-    maxY += padding;
-    
-    // Calculate the required scale to fit the graph
-    const graphWidth = maxX - minX;
-    const graphHeight = maxY - minY;
-    const containerWidth = width;
-    const containerHeight = height;
-    
-    const scaleX = containerWidth / graphWidth;
-    const scaleY = containerHeight / graphHeight;
-    const scale = Math.min(scaleX, scaleY, 1); // Limit max scale to 1
-    
-    // Calculate the center of the graph
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    
-    // Reset the view to fit the entire graph
-    svg.transition()
-       .duration(750)
-       .call(
-           svg.zoom.transform,
-           d3.zoomIdentity
-             .translate(containerWidth / 2, containerHeight / 2)
-             .scale(scale)
-             .translate(-centerX, -centerY)
-       );
+    // Restore the button after a short delay
+    setTimeout(() => {
+        button.textContent = originalText;
+        button.style.backgroundColor = '';
+    }, 1000);
 }
 
 // Drag functions
