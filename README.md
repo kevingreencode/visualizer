@@ -18,12 +18,12 @@ A powerful web-based tool for visualizing and interacting with network topology 
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/network-topology-visualizer.git
+   git clone https://github.com/kevingreencode/visualizer.git
    ```
 
 2. Navigate to the project directory:
    ```
-   cd network-topology-visualizer
+   cd visualizer
    ```
 
 3. Open `index.html` in your preferred web browser:
