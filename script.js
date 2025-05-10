@@ -747,19 +747,21 @@ function positionHostsUnderToRs(hosts, tors, yPosition) {
         });
         
         // Calculate the horizontal space for hosts under this ToR
-        const hostSpacing = 40;
+        const hostSpacing = 50; // Increased spacing to prevent overlap
+        const minTorDistance = 100; // Minimum distance from ToR center
         
         if (connectedHosts.length === 1) {
             // Single host - center under ToR
             connectedHosts[0].layoutX = tor.layoutX;
             connectedHosts[0].layoutY = yPosition; // All hosts get the EXACT same Y
         } else if (connectedHosts.length === 2) {
-            // Two hosts - place symmetrically on either side
-            connectedHosts[0].layoutX = tor.layoutX - hostSpacing / 2;
-            connectedHosts[1].layoutX = tor.layoutX + hostSpacing / 2;
+            // Two hosts - place symmetrically on either side with adequate spacing
+            const offset = Math.max(hostSpacing / 2, minTorDistance);
+            connectedHosts[0].layoutX = tor.layoutX - offset;
+            connectedHosts[1].layoutX = tor.layoutX + offset;
             connectedHosts.forEach(host => host.layoutY = yPosition); // All hosts get the EXACT same Y
         } else {
-            // Multiple hosts - arrange symmetrically
+            // Multiple hosts - arrange symmetrically with proper spacing
             const totalWidth = (connectedHosts.length - 1) * hostSpacing;
             const startX = tor.layoutX - totalWidth / 2;
             
