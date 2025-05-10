@@ -1,0 +1,144 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: #f5f5f5;
+}
+.header {
+    background-color: #333;
+    color: white;
+    padding: 1rem;
+    text-align: center;
+}
+.container {
+    display: flex;
+    flex-grow: 1;
+    height: calc(100vh - 60px);
+}
+.sidebar {
+    width: 300px;
+    padding: 1rem;
+    background-color: #e0e0e0;
+    overflow-y: auto;
+    border-right: 1px solid #ccc;
+}
+.main {
+    flex-grow: 1;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+#graph-container {
+    flex-grow: 1;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: white;
+    position: relative;
+}
+.controls {
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+button {
+    padding: 0.5rem 1rem;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+button:hover {
+    background-color: #45a049;
+}
+#file-upload {
+    display: none;
+}
+.upload-btn {
+    background-color: #2196F3;
+}
+.upload-btn:hover {
+    background-color: #0b7dda;
+}
+.legend {
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-right: 1rem;
+}
+.legend-color {
+    width: 20px;
+    height: 20px;
+    margin-right: 5px;
+    border-radius: 50%;
+}
+#details-panel {
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: white;
+}
+.node {
+    cursor: pointer;
+}
+.link {
+    stroke: #999;
+    stroke-opacity: 0.6;
+}
+.bandwidth-label {
+    font-size: 10px;
+    fill: #333;
+    pointer-events: none;
+}
+.node-label {
+    font-size: 12px;
+    fill: #333;
+    pointer-events: none;
+    user-select: none;
+}
+pre {
+    background-color: #f8f8f8;
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+/* Grid styling */
+.grid-line {
+    stroke: #e0e0e0;
+    stroke-width: 1px;
+}
+/* Toggle grid button */
+.grid-btn {
+    background-color: #9c27b0;
+}
+.grid-btn:hover {
+    background-color: #7b1fa2;
+}
+/* Layout selector */
+#layout-selector {
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    margin-left: 0.5rem;
+}
+/* Add pulse animation for nodes when loading new topology */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+.node.pulse {
+    animation: pulse 1s ease-in-out;
+}

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Topology Visualizer</title>
+    <!-- External CSS file -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="header">
+        <h1>Network Topology Visualizer</h1>
+    </div>
+    <div class="container">
+        <div class="sidebar">
+            <h2>Topology Information</h2>
+            <div id="topology-info">
+                <p>Load a topology file to see details.</p>
+            </div>
+            <h3>Properties</h3>
+            <div id="properties-info">
+                <p>No topology loaded.</p>
+            </div>
+            <div class="legend">
+                <h3>Legend</h3>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #2ca02c;"></div>
+                    <span>Host (h)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #1f77b4;"></div>
+                    <span>ToR/Edge Switch (t)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #ff7f0e;"></div>
+                    <span>Aggregate Switch (a)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #d62728;"></div>
+                    <span>Core Switch (c)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #7f7f7f;"></div>
+                    <span>Generic Switch (s)</span>
+                </div>
+            </div>
+            <div class="grid-settings">
+                <h3>Grid Settings</h3>
+                <div>
+                    <label for="grid-size">Grid Size: </label>
+                    <input type="range" id="grid-size" min="20" max="100" value="40" step="10">
+                    <span id="grid-size-value">40px</span>
+                </div>
+                <div>
+                    <label><input type="checkbox" id="snap-to-grid" checked> Snap to Grid</label>
+                </div>
+            </div>
+        </div>
+        <div class="main">
+            <div class="controls">
+                <input type="file" id="file-upload" accept=".json">
+                <button class="upload-btn" id="upload-btn">Upload Topology File</button>
+                <div id="reset-view-btn"></div>
+                <button id="toggle-labels-btn">Toggle Labels</button>
+                <button class="grid-btn" id="toggle-grid-btn">Toggle Grid</button>
+            </div>
+            <div id="graph-container"></div>
+            <div id="details-panel">
+                <h3>Node Details</h3>
+                <p>Click on a node to see details.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- D3.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.2/d3.min.js"></script>
+    
+    <!-- External JavaScript file -->
+    <script src="script.js"></script>
+</body>
+</html>
