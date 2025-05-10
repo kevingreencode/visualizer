@@ -349,7 +349,8 @@ function buildGraph(topology) {
         nodes.push({
             id: hostId,
             type: getNodeType(hostId, topology),
-            config: topology.hosts[hostId]
+            config: topology.hosts[hostId],
+            ports: {} // Store port assignments
         });
     }
     
@@ -358,14 +359,23 @@ function buildGraph(topology) {
         nodes.push({
             id: switchId,
             type: getNodeType(switchId, topology),
-            config: topology.switches[switchId]
+            config: topology.switches[switchId],
+            ports: {} // Store port assignments
         });
     }
     
-    // Add links
+    // Track port assignments for each node
+    const nodePortCounters = {};
+    
+    // Initialize port counters
+    nodes.forEach(node => {
+        nodePortCounters[node.id] = 1; // Start port numbering from 1
+    });
+    
+    // Add links and assign port numbers
     topology.links.forEach(link => {
-        const source = link[0];
-        const target = link[1];
+        const sourceId = link[0];
+        const targetId = link[1];
         let properties = {};
         
         // Check if link has properties
@@ -373,10 +383,27 @@ function buildGraph(topology) {
             properties = link[2];
         }
         
+        // Assign port numbers
+        const sourcePort = nodePortCounters[sourceId]++;
+        const targetPort = nodePortCounters[targetId]++;
+        
+        // Store port assignments in the nodes
+        const sourceNode = nodes.find(n => n.id === sourceId);
+        const targetNode = nodes.find(n => n.id === targetId);
+        
+        if (sourceNode) {
+            sourceNode.ports[targetId] = sourcePort;
+        }
+        if (targetNode) {
+            targetNode.ports[sourceId] = targetPort;
+        }
+        
         links.push({
-            source,
-            target,
-            properties
+            source: sourceId,
+            target: targetId,
+            properties,
+            sourcePort,
+            targetPort
         });
     });
     
@@ -914,7 +941,7 @@ function showNodeDetails(node) {
         html += `<pre>${JSON.stringify(node.config, null, 2)}</pre>`;
     }
     
-    // Show connected links
+    // Show connected links with port information
     html += `<p><strong>Connected Links:</strong></p>`;
     const connectedLinks = graph.links.filter(link => {
         const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
@@ -935,13 +962,23 @@ function showNodeDetails(node) {
             const otherNode = graph.nodes.find(n => n.id === otherEnd);
             const otherType = otherNode ? nodeTypeMap[otherNode.type] || otherNode.type : 'unknown';
             
+            // Get port numbers
+            let thisPort, otherPort;
+            if (sourceId === node.id) {
+                thisPort = link.sourcePort;
+                otherPort = link.targetPort;
+            } else {
+                thisPort = link.targetPort;
+                otherPort = link.sourcePort;
+            }
+            
             // Format bandwidth properties
             let bandwidth = '';
             if (link.properties && link.properties.bw) {
                 bandwidth = ` (Bandwidth: ${link.properties.bw} Mbps)`;
             }
             
-            html += `<li>Connected to <strong>${otherEnd}</strong> (${otherType})${bandwidth}</li>`;
+            html += `<li>Port ${thisPort} connected to <strong>${otherEnd}</strong> (${otherType}) port ${otherPort}${bandwidth}</li>`;
         });
         html += `</ul>`;
     }
