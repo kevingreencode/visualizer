@@ -344,21 +344,8 @@ function getNodeType(nodeId, topology) {
     
     // Handle other naming patterns
     if (prefix === 's') {
-        // For s1, s2, etc. - detect role based on connections
-        // Count connections to determine if it's a core, aggregate, tor, or other type
-        let isConnectedToHosts = false;
-        
-        if (topology && topology.links) {
-            for (const link of topology.links) {
-                if ((link[0] === nodeId && link[1].charAt(0) === 'h') || 
-                    (link[1] === nodeId && link[0].charAt(0) === 'h')) {
-                    isConnectedToHosts = true;
-                    break;
-                }
-            }
-        }
-        
-        return isConnectedToHosts ? 'tor' : 'switch';
+        // Always treat 's' prefixed nodes as generic switches
+        return 'switch';
     }
     
     // Handle binary tree naming (a1, b1, etc.)
