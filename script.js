@@ -493,26 +493,42 @@ function visualizeGraph(graph) {
             break;
     }
     
-    // Snap initial positions to grid
+    // Snap initial positions to grid and fix Y positions for fat tree
     if (snapToGrid) {
         graph.nodes.forEach(node => {
             node.x = Math.round(node.layoutX / gridSize) * gridSize;
             node.y = Math.round(node.layoutY / gridSize) * gridSize;
+            // For fat tree layout, prevent vertical movement by fixing Y position
+            if (currentLayout === 'fattree') {
+                node.fy = node.y;  // Fix Y position
+            }
         });
     } else {
         graph.nodes.forEach(node => {
             node.x = node.layoutX;
             node.y = node.layoutY;
+            // For fat tree layout, prevent vertical movement
+            if (currentLayout === 'fattree') {
+                node.fy = node.y;  // Fix Y position
+            }
         });
     }
     
-    // Set up force simulation
+    // Auto-zoom to fit the topology
+    autoZoomToFit(graph);
+    
+    // Set up force simulation with constraints for fat tree
     simulation = d3.forceSimulation(graph.nodes)
         .force('link', d3.forceLink(graph.links).id(d => d.id).distance(100))
         .force('x', d3.forceX(d => d.x).strength(0.5))
-        .force('y', d3.forceY(d => d.y).strength(0.5))
-        .force('charge', d3.forceManyBody().strength(-50))
-        .alphaDecay(0.1); // Faster settling
+        .force('charge', d3.forceManyBody().strength(-50));
+    
+    // Only add Y force for non-fat tree layouts
+    if (currentLayout !== 'fattree') {
+        simulation.force('y', d3.forceY(d => d.y).strength(0.5));
+    }
+    
+    simulation.alphaDecay(0.1); // Faster settling
     
     // Create links first (so they appear under nodes)
     const link = svg.select('g').selectAll('.link')
@@ -588,13 +604,25 @@ function visualizeGraph(graph) {
     
     // Update simulation on each tick
     simulation.on('tick', () => {
+        // For fat tree layout, ensure Y positions stay fixed
+        if (currentLayout === 'fattree') {
+            graph.nodes.forEach(d => {
+                // Keep Y position fixed for fat tree layout
+                if (d.fy !== undefined) {
+                    d.y = d.fy;
+                }
+            });
+        }
+        
         // Snap nodes to grid if enabled
         if (snapToGrid) {
             graph.nodes.forEach(d => {
                 // Only snap nodes that are not being dragged
                 if (!d.isDragging) {
                     d.x = Math.round(d.x / gridSize) * gridSize;
-                    d.y = Math.round(d.y / gridSize) * gridSize;
+                    if (currentLayout !== 'fattree') {
+                        d.y = Math.round(d.y / gridSize) * gridSize;
+                    }
                 }
             });
         }
@@ -629,49 +657,370 @@ function getNodeColor(type) {
     }
 }
 
-// Apply Fat Tree layout with strict linear layers
+// Apply Fat Tree layout with true symmetrical placement
 function applyFatTreeLayout(graph) {
-    // Layer heights with increased spacing between layers for clarity
-    const coreLayerY = height * 0.15;     // Core switches at top
-    const aggregateLayerY = height * 0.4; // Aggregate switches below core
-    const torLayerY = height * 0.65;      // ToR switches below aggregate
+    // Pre-calculate and snap layer heights to grid to ensure consistency
+    const coreLayerY = Math.round((height * 0.15) / gridSize) * gridSize;     
+    const aggregateLayerY = Math.round((height * 0.38) / gridSize) * gridSize; 
+    const torLayerY = Math.round((height * 0.62) / gridSize) * gridSize;      
+    const hostLayerY = Math.round((height * 0.85) / gridSize) * gridSize;   
     
-    // Ensure host layer aligns with grid lines by pre-snapping the value
-    // This ensures all hosts will be positioned at exactly the same grid line
-    const rawHostLayerY = height * 0.9;   // Raw value for hosts at bottom
-    const hostLayerY = Math.round(rawHostLayerY / gridSize) * gridSize; // Pre-snapped to grid
-    
-    // Get nodes by type
+    // Get nodes by type and sort them
     const coreNodes = graph.nodes.filter(n => n.type === 'core');
     const aggregateNodes = graph.nodes.filter(n => n.type === 'aggregate');
     const torNodes = graph.nodes.filter(n => n.type === 'tor');
     const hostNodes = graph.nodes.filter(n => n.type === 'host');
     
-    // Sort nodes by ID for consistent positioning
-    const sortNodesByID = (a, b) => {
-        // Extract numeric part for natural sorting
+    // Sort all nodes by ID numerically
+    const sortByNumId = (a, b) => {
         const aNum = parseInt(a.id.match(/\d+/)[0] || 0);
         const bNum = parseInt(b.id.match(/\d+/)[0] || 0);
         return aNum - bNum;
     };
     
-    const sortedCoreNodes = [...coreNodes].sort(sortNodesByID);
-    const sortedAggregateNodes = [...aggregateNodes].sort(sortNodesByID);
-    const sortedTorNodes = [...torNodes].sort(sortNodesByID);
-    const sortedHostNodes = [...hostNodes].sort(sortNodesByID);
+    const sortedCoreNodes = [...coreNodes].sort(sortByNumId);
+    const sortedAggregateNodes = [...aggregateNodes].sort(sortByNumId);
+    const sortedTorNodes = [...torNodes].sort(sortByNumId);
+    const sortedHostNodes = [...hostNodes].sort(sortByNumId);
     
-    // Calculate horizontal spacing for strictly linear layouts
-    const padding = 40; // Padding from edges
-    const usableWidth = width - (padding * 2);
+    // Position all layers with perfect symmetry
+    positionLayerSymmetrically(sortedCoreNodes, coreLayerY);
+    positionLayerSymmetrically(sortedAggregateNodes, aggregateLayerY);
+    positionLayerSymmetrically(sortedTorNodes, torLayerY);
+    
+    // Position hosts symmetrically under their ToR switches
+    positionHostsUnderToRs(sortedHostNodes, sortedTorNodes, hostLayerY);
+}
 
-    // Position nodes with strict linear distribution in each layer
-    positionNodesLinearly(sortedCoreNodes, usableWidth, padding, coreLayerY);
-    positionNodesLinearly(sortedAggregateNodes, usableWidth, padding, aggregateLayerY);
-    positionNodesLinearly(sortedTorNodes, usableWidth, padding, torLayerY);
+// Position a layer of nodes with perfect symmetry
+function positionLayerSymmetrically(nodes, yPosition) {
+    if (nodes.length === 0) return;
     
-    // Group hosts by their connected ToR switch
-    const hostToRackMap = buildHostToTorMap(graph);
-    positionHostsUnderTors(sortedHostNodes, sortedTorNodes, hostToRackMap, hostLayerY);
+    const margin = 40;
+    const availableWidth = width - (2 * margin);
+    
+    if (nodes.length === 1) {
+        // Single node - center it
+        nodes[0].layoutX = width / 2;
+        nodes[0].layoutY = yPosition; // All nodes in layer get the EXACT same Y
+    } else {
+        // Multiple nodes - distribute evenly
+        // Calculate the spacing to use the full width
+        const spacing = availableWidth / (nodes.length - 1);
+        
+        nodes.forEach((node, index) => {
+            node.layoutX = margin + (index * spacing);
+            node.layoutY = yPosition; // All nodes in layer get the EXACT same Y
+        });
+    }
+}
+
+// Position hosts symmetrically under their ToR switches
+function positionHostsUnderToRs(hosts, tors, yPosition) {
+    // Create mapping of ToR to hosts
+    const torToHostsMap = new Map();
+    
+    // Build the host to ToR mapping first
+    const hostToTorMap = buildHostToTorMap(graph);
+    
+    // Group hosts by their ToR
+    hosts.forEach(host => {
+        const torId = hostToTorMap.get(host.id);
+        if (torId) {
+            if (!torToHostsMap.has(torId)) {
+                torToHostsMap.set(torId, []);
+            }
+            torToHostsMap.get(torId).push(host);
+        }
+    });
+    
+    // Position hosts under each ToR
+    tors.forEach(tor => {
+        const connectedHosts = torToHostsMap.get(tor.id) || [];
+        if (connectedHosts.length === 0) return;
+        
+        // Sort hosts numerically by ID for consistent ordering
+        connectedHosts.sort((a, b) => {
+            const aNum = parseInt(a.id.match(/\d+/)[0] || 0);
+            const bNum = parseInt(b.id.match(/\d+/)[0] || 0);
+            return aNum - bNum;
+        });
+        
+        // Calculate the horizontal space for hosts under this ToR
+        const hostSpacing = 40;
+        
+        if (connectedHosts.length === 1) {
+            // Single host - center under ToR
+            connectedHosts[0].layoutX = tor.layoutX;
+            connectedHosts[0].layoutY = yPosition; // All hosts get the EXACT same Y
+        } else if (connectedHosts.length === 2) {
+            // Two hosts - place symmetrically on either side
+            connectedHosts[0].layoutX = tor.layoutX - hostSpacing / 2;
+            connectedHosts[1].layoutX = tor.layoutX + hostSpacing / 2;
+            connectedHosts.forEach(host => host.layoutY = yPosition); // All hosts get the EXACT same Y
+        } else {
+            // Multiple hosts - arrange symmetrically
+            const totalWidth = (connectedHosts.length - 1) * hostSpacing;
+            const startX = tor.layoutX - totalWidth / 2;
+            
+            connectedHosts.forEach((host, index) => {
+                host.layoutX = startX + (index * hostSpacing);
+                host.layoutY = yPosition; // All hosts get the EXACT same Y
+            });
+        }
+    });
+    
+    // Handle any unmapped hosts (shouldn't happen in a proper fat tree)
+    const unmappedHosts = hosts.filter(host => !hostToTorMap.has(host.id));
+    if (unmappedHosts.length > 0) {
+        const unmappedY = Math.round((yPosition + 40) / gridSize) * gridSize;
+        positionLayerSymmetrically(unmappedHosts, unmappedY);
+    }
+}
+
+// Position nodes symmetrically across the available width
+function positionNodesSymmetrically(nodes, containerWidth, yPosition) {
+    if (nodes.length === 0) return;
+    
+    const margin = 30;
+    const usableWidth = containerWidth - (margin * 2);
+    const minSpacing = 50; // Minimum space between nodes
+    
+    // Calculate if nodes fit in one row
+    const singleRowWidth = nodes.length * minSpacing;
+    
+    if (singleRowWidth <= usableWidth) {
+        // All nodes fit in one row - center them
+        if (nodes.length === 1) {
+            nodes[0].layoutX = containerWidth / 2;
+            nodes[0].layoutY = yPosition;
+        } else {
+            // Calculate equal spacing
+            const spacing = usableWidth / (nodes.length - 1);
+            nodes.forEach((node, index) => {
+                node.layoutX = margin + (index * spacing);
+                node.layoutY = yPosition;
+            });
+        }
+    } else {
+        // Multiple rows needed - arrange in a grid pattern
+        const nodesPerRow = Math.floor(usableWidth / minSpacing);
+        const rows = Math.ceil(nodes.length / nodesPerRow);
+        const rowHeight = 40;
+        
+        nodes.forEach((node, index) => {
+            const row = Math.floor(index / nodesPerRow);
+            const col = index % nodesPerRow;
+            const nodesInRow = Math.min(nodesPerRow, nodes.length - (row * nodesPerRow));
+            
+            // Center each row horizontally
+            const rowWidth = (nodesInRow - 1) * minSpacing;
+            const rowStartX = (containerWidth - rowWidth) / 2;
+            
+            node.layoutX = rowStartX + (col * minSpacing);
+            
+            // Center all rows vertically around the base Y position
+            const totalHeight = (rows - 1) * rowHeight;
+            node.layoutY = yPosition + (row * rowHeight) - (totalHeight / 2);
+        });
+    }
+}
+
+// Position hosts symmetrically under their ToR switches
+function positionHostsSymmetrically(hosts, tors, hostToRackMap, yPosition) {
+    // Create a map of ToR switches to their assigned hosts
+    const torToHostsMap = new Map();
+    
+    hosts.forEach(host => {
+        const connectedTor = hostToRackMap.get(host.id);
+        if (connectedTor) {
+            if (!torToHostsMap.has(connectedTor)) {
+                torToHostsMap.set(connectedTor, []);
+            }
+            torToHostsMap.get(connectedTor).push(host);
+        }
+    });
+    
+    // Sort ToR switches by their X position
+    const sortedTors = [...tors].sort((a, b) => a.layoutX - b.layoutX);
+    
+    // Calculate spacing between ToR switches
+    if (sortedTors.length > 1) {
+        const torSpacing = sortedTors[1].layoutX - sortedTors[0].layoutX;
+        const hostSpacing = 35;
+        
+        sortedTors.forEach((tor) => {
+            const connectedHosts = torToHostsMap.get(tor.id) || [];
+            if (connectedHosts.length > 0) {
+                // Determine max hosts that can fit in one row under this ToR
+                const maxHostsPerRow = Math.floor(torSpacing / hostSpacing);
+                const actualMaxHosts = Math.max(2, maxHostsPerRow); // At least 2 hosts per row
+                
+                if (connectedHosts.length <= actualMaxHosts) {
+                    // Single row - center hosts under the ToR
+                    const totalWidth = (connectedHosts.length - 1) * hostSpacing;
+                    const startX = tor.layoutX - totalWidth / 2;
+                    
+                    connectedHosts.forEach((host, index) => {
+                        host.layoutX = startX + (index * hostSpacing);
+                        host.layoutY = yPosition;
+                    });
+                } else {
+                    // Multiple rows - arrange in a grid centered under the ToR
+                    const rows = Math.ceil(connectedHosts.length / actualMaxHosts);
+                    const rowHeight = 35;
+                    
+                    connectedHosts.forEach((host, index) => {
+                        const row = Math.floor(index / actualMaxHosts);
+                        const col = index % actualMaxHosts;
+                        const hostsInRow = Math.min(actualMaxHosts, connectedHosts.length - (row * actualMaxHosts));
+                        
+                        // Center each row under the ToR
+                        const rowWidth = (hostsInRow - 1) * hostSpacing;
+                        const rowStartX = tor.layoutX - rowWidth / 2;
+                        
+                        host.layoutX = rowStartX + (col * hostSpacing);
+                        
+                        // Center all rows vertically
+                        const totalHeight = (rows - 1) * rowHeight;
+                        host.layoutY = yPosition + (row * rowHeight) - (totalHeight / 2);
+                    });
+                }
+            }
+        });
+    }
+    
+    // Handle unmapped hosts by centering them at the bottom
+    const unmappedHosts = hosts.filter(host => !hostToRackMap.has(host.id));
+    if (unmappedHosts.length > 0) {
+        positionNodesSymmetrically(unmappedHosts, width, yPosition + 60);
+    }
+}
+
+// Enhanced host positioning with more horizontal space
+function positionHostsUnderTorsWithMoreSpace(hosts, tors, hostToRackMap, yPosition, usableWidth, margin) {
+    // Create a map of tor switches to their assigned hosts
+    const torToHostsMap = new Map();
+    
+    hosts.forEach(host => {
+        const connectedTor = hostToRackMap.get(host.id);
+        if (connectedTor) {
+            if (!torToHostsMap.has(connectedTor)) {
+                torToHostsMap.set(connectedTor, []);
+            }
+            torToHostsMap.get(connectedTor).push(host);
+        }
+    });
+    
+    // Calculate available space per ToR switch
+    const torCount = tors.length;
+    const spacePerTor = torCount > 0 ? usableWidth / torCount : usableWidth;
+    
+    // Sort ToR switches by their X position for consistent layout
+    const sortedTors = [...tors].sort((a, b) => a.layoutX - b.layoutX);
+    
+    // Position hosts under their connected ToR switch
+    sortedTors.forEach((tor, torIndex) => {
+        const connectedHosts = torToHostsMap.get(tor.id) || [];
+        if (connectedHosts.length > 0) {
+            // Calculate the horizontal range for this ToR's hosts
+            const torStartX = margin + torIndex * spacePerTor;
+            const torEndX = torStartX + spacePerTor;
+            const torCenterX = (torStartX + torEndX) / 2;
+            
+            // Adjust for edge cases
+            const hostSpacing = 35;
+            const maxHostsPerRow = Math.floor(spacePerTor / hostSpacing);
+            const actualMaxHosts = Math.max(4, maxHostsPerRow); // Ensure at least 4 hosts per row
+            
+            if (connectedHosts.length <= actualMaxHosts) {
+                // Single row of hosts
+                const totalHostWidth = connectedHosts.length * hostSpacing;
+                const hostStartX = torCenterX - totalHostWidth / 2;
+                
+                connectedHosts.forEach((host, index) => {
+                    host.layoutX = hostStartX + (index + 0.5) * hostSpacing;
+                    host.layoutY = yPosition;
+                });
+            } else {
+                // Multiple rows of hosts
+                const rows = Math.ceil(connectedHosts.length / actualMaxHosts);
+                const verticalSpacing = 35;
+                
+                connectedHosts.forEach((host, index) => {
+                    const row = Math.floor(index / actualMaxHosts);
+                    const col = index % actualMaxHosts;
+                    const hostsInRow = Math.min(actualMaxHosts, connectedHosts.length - (row * actualMaxHosts));
+                    
+                    const rowWidth = hostsInRow * hostSpacing;
+                    const rowStartX = torCenterX - rowWidth / 2;
+                    
+                    host.layoutX = rowStartX + (col + 0.5) * hostSpacing;
+                    
+                    // Center multiple rows vertically around the base Y position
+                    const totalRowsHeight = (rows - 1) * verticalSpacing;
+                    const yOffset = row * verticalSpacing - totalRowsHeight / 2;
+                    host.layoutY = yPosition + yOffset;
+                });
+            }
+        }
+    });
+    
+    // For hosts not mapped to any ToR, position them at the bottom
+    const unmappedHosts = hosts.filter(host => !hostToRackMap.has(host.id));
+    if (unmappedHosts.length > 0) {
+        positionNodesWithSpacing(unmappedHosts, usableWidth, margin, yPosition + 50, 40);
+    }
+}
+
+// Evenly distribute nodes with proper spacing
+function positionNodesWithSpacing(nodes, availableWidth, startX, yPosition, nodeWidth) {
+    if (nodes.length === 0) return;
+    
+    // Calculate if nodes will fit in one line
+    const minRequiredWidth = nodes.length * nodeWidth;
+    
+    if (minRequiredWidth <= availableWidth) {
+        // Nodes fit in one line - distribute evenly
+        if (nodes.length === 1) {
+            nodes[0].layoutX = startX + availableWidth / 2;
+            nodes[0].layoutY = yPosition;
+            return;
+        }
+        
+        // Calculate spacing between nodes
+        const spacing = availableWidth / (nodes.length - 1);
+        
+        // Position each node in a straight line
+        nodes.forEach((node, index) => {
+            node.layoutX = startX + (spacing * index);
+            node.layoutY = yPosition;
+        });
+    } else {
+        // Too many nodes for one line - arrange in multiple rows
+        const maxNodesPerRow = Math.floor(availableWidth / nodeWidth);
+        const rows = Math.ceil(nodes.length / maxNodesPerRow);
+        const rowHeight = 60; // Vertical spacing between rows
+        
+        nodes.forEach((node, index) => {
+            const row = Math.floor(index / maxNodesPerRow);
+            const col = index % maxNodesPerRow;
+            const nodesInRow = Math.min(maxNodesPerRow, nodes.length - (row * maxNodesPerRow));
+            
+            // Calculate spacing for this specific row
+            if (nodesInRow === 1) {
+                node.layoutX = startX + availableWidth / 2;
+            } else {
+                const rowSpacing = availableWidth / (nodesInRow - 1);
+                node.layoutX = startX + (col * rowSpacing);
+            }
+            
+            // Adjust Y position for multiple rows, centering them around the base Y
+            const totalRowsHeight = (rows - 1) * rowHeight;
+            const yOffset = row * rowHeight - totalRowsHeight / 2;
+            node.layoutY = yPosition + yOffset;
+        });
+    }
 }
 
 // Build a map of hosts to their connected ToR switches
@@ -712,23 +1061,50 @@ function positionHostsUnderTors(hosts, tors, hostToRackMap, yPosition) {
         }
     });
     
+    // Calculate vertical offset for hosts to create subgroups
+    const hostVerticalSpacing = 30;
+    
     // Position hosts under their connected ToR switch
     tors.forEach(tor => {
         const connectedHosts = torToHostsMap.get(tor.id) || [];
         if (connectedHosts.length > 0) {
-            const totalWidth = 120; // Space to distribute hosts under each ToR
-            const spacing = totalWidth / (connectedHosts.length + 1);
+            // Calculate if hosts fit in one row under the ToR
+            const hostSpacing = 40;
+            const maxHostsPerRow = 6; // Maximum hosts per row
             
-            connectedHosts.forEach((host, index) => {
-                host.layoutX = tor.layoutX - totalWidth / 2 + (index + 1) * spacing;
-                host.layoutY = yPosition;
-            });
+            if (connectedHosts.length <= maxHostsPerRow) {
+                // Single row of hosts
+                const totalWidth = Math.min(connectedHosts.length * hostSpacing, 240);
+                const startX = tor.layoutX - totalWidth / 2;
+                
+                connectedHosts.forEach((host, index) => {
+                    host.layoutX = startX + (index + 0.5) * hostSpacing;
+                    host.layoutY = yPosition;
+                });
+            } else {
+                // Multiple rows of hosts
+                const rows = Math.ceil(connectedHosts.length / maxHostsPerRow);
+                
+                connectedHosts.forEach((host, index) => {
+                    const row = Math.floor(index / maxHostsPerRow);
+                    const col = index % maxHostsPerRow;
+                    const hostsInRow = Math.min(maxHostsPerRow, connectedHosts.length - (row * maxHostsPerRow));
+                    
+                    const rowWidth = hostsInRow * hostSpacing;
+                    const startX = tor.layoutX - rowWidth / 2;
+                    
+                    host.layoutX = startX + (col + 0.5) * hostSpacing;
+                    host.layoutY = yPosition + row * hostVerticalSpacing;
+                });
+            }
         }
     });
     
-    // For hosts not mapped to any ToR, position them at the bottom
+    // For hosts not mapped to any ToR, position them at the bottom in a linear arrangement
     const unmappedHosts = hosts.filter(host => !hostToRackMap.has(host.id));
-    positionNodesLinearly(unmappedHosts, width - 80, 40, yPosition);
+    if (unmappedHosts.length > 0) {
+        positionNodesWithSpacing(unmappedHosts, width - 80, 40, yPosition + 40, 50);
+    }
 }
 
 // Apply Binary Tree layout
@@ -1065,6 +1441,51 @@ function resetView() {
         button.textContent = originalText;
         button.style.backgroundColor = '';
     }, 1000);
+}
+
+// Auto-zoom to fit the entire topology on screen
+function autoZoomToFit(graph) {
+    if (!graph || graph.nodes.length === 0) return;
+    
+    // Calculate the bounding box of all nodes
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    graph.nodes.forEach(node => {
+        minX = Math.min(minX, node.x || 0);
+        minY = Math.min(minY, node.y || 0);
+        maxX = Math.max(maxX, node.x || 0);
+        maxY = Math.max(maxY, node.y || 0);
+    });
+    
+    // Add padding around the graph
+    const padding = 80;
+    minX -= padding;
+    minY -= padding;
+    maxX += padding;
+    maxY += padding;
+    
+    // Calculate the required scale to fit the graph
+    const graphWidth = maxX - minX;
+    const graphHeight = maxY - minY;
+    const containerWidth = width;
+    const containerHeight = height;
+    
+    const scaleX = containerWidth / graphWidth;
+    const scaleY = containerHeight / graphHeight;
+    const scale = Math.min(scaleX, scaleY, 2); // Limit max scale to 2x
+    
+    // Calculate the center of the graph
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    
+    // Apply the zoom transform without animation (for initial load)
+    svg.call(
+        svg.zoom.transform,
+        d3.zoomIdentity
+            .translate(containerWidth / 2, containerHeight / 2)
+            .scale(scale)
+            .translate(-centerX, -centerY)
+    );
 }
 
 // Drag functions
