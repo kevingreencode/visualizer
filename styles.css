@@ -90,8 +90,15 @@ button:hover {
     border-radius: 5px;
     background-color: white;
 }
-.node {
+.node-group {
     cursor: pointer;
+}
+.node {
+    stroke: #000;
+    stroke-width: 1px;
+}
+.node-icon {
+    pointer-events: none;
 }
 .link {
     stroke: #999;

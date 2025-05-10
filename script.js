@@ -11,6 +11,40 @@ let gridSize = 40; // Default grid size
 let snapToGrid = true; // Default snap to grid setting
 let currentLayout = 'auto'; // Added to track current layout
 
+// SVG icon definitions
+const svgIcons = {
+    // Host icon (server/computer)
+    host: {
+        path: 'M2,2 v16 h20 v-16 z M4,4 h16 v10 h-16 z M10,15 h4 v3 h-4 z',
+        viewBox: '0 0 24 24',
+        size: 24
+    },
+    // Switch icon (network switch)
+    switch: {
+        path: 'M2,6 v12 h20 v-12 z M4,8 h16 v8 h-16 z M6,10 v4 h2 v-4 z M10,10 v4 h2 v-4 z M14,10 v4 h2 v-4 z M18,10 v4 h2 v-4 z',
+        viewBox: '0 0 24 24',
+        size: 24
+    },
+    // Core switch icon (slightly different)
+    core: {
+        path: 'M2,6 v12 h20 v-12 z M4,8 h16 v8 h-16 z M6,10 v4 h2 v-4 z M10,10 v4 h2 v-4 z M14,10 v4 h2 v-4 z M18,10 v4 h2 v-4 z M2,3 h20 v2 h-20 z M2,19 h20 v2 h-20 z',
+        viewBox: '0 0 24 24',
+        size: 24
+    },
+    // Aggregate switch icon
+    aggregate: {
+        path: 'M2,6 v12 h20 v-12 z M4,8 h16 v8 h-16 z M6,10 v4 h2 v-4 z M10,10 v4 h2 v-4 z M14,10 v4 h2 v-4 z M18,10 v4 h2 v-4 z M10,2 h4 v3 h-4 z',
+        viewBox: '0 0 24 24',
+        size: 24
+    },
+    // ToR switch icon
+    tor: {
+        path: 'M2,6 v12 h20 v-12 z M4,8 h16 v8 h-16 z M6,10 v4 h2 v-4 z M10,10 v4 h2 v-4 z M14,10 v4 h2 v-4 z M18,10 v4 h2 v-4 z M10,19 h4 v3 h-4 z',
+        viewBox: '0 0 24 24',
+        size: 24
+    }
+};
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
     // Set up event listeners
@@ -453,35 +487,52 @@ function visualizeGraph(graph) {
         .force('charge', d3.forceManyBody().strength(-50))
         .alphaDecay(0.1); // Faster settling
     
-    // Create links
+    // Create links first (so they appear under nodes)
     const link = svg.select('g').selectAll('.link')
         .data(graph.links)
         .enter()
         .append('line')
         .attr('class', 'link')
-        .attr('stroke-width', d => d.properties.bw ? Math.sqrt(d.properties.bw) * 0.5 : 1);
+        .attr('stroke-width', d => d.properties.bw ? Math.sqrt(d.properties.bw) * 0.5 : 1)
+        .attr('stroke', '#999')  // Ensure links have a visible stroke color
+        .attr('stroke-opacity', 0.6);
     
-    // Create nodes
-    const node = svg.select('g').selectAll('.node')
+    // Create node groups
+    const nodeGroup = svg.select('g').selectAll('.node-group')
         .data(graph.nodes)
         .enter()
-        .append('circle')
-        .attr('class', 'node')
-        .attr('r', d => d.type === 'host' ? 10 : 12) // Hosts slightly smaller
-        .attr('fill', d => {
-            // Color based on node type
-            switch(d.type) {
-                case 'host': return '#2ca02c';      // Green
-                case 'tor': return '#1f77b4';       // Blue
-                case 'aggregate': return '#ff7f0e'; // Orange
-                case 'core': return '#d62728';      // Red
-                default: return '#7f7f7f';          // Gray for unknown
-            }
-        })
+        .append('g')
+        .attr('class', 'node-group')
         .call(d3.drag()
             .on('start', dragstarted)
             .on('drag', dragged)
             .on('end', dragended));
+    
+    // Add node icon
+    nodeGroup.each(function(d) {
+        const node = d3.select(this);
+        const iconType = d.type === 'host' ? 'host' : 
+                        (d.type === 'core' ? 'core' : 
+                         d.type === 'aggregate' ? 'aggregate' : 
+                         d.type === 'tor' ? 'tor' : 'switch');
+        
+        const icon = svgIcons[iconType];
+        
+        // Background circle for easier selection and consistent coloring
+        node.append('circle')
+            .attr('class', 'node')
+            .attr('r', 14)
+            .attr('fill', getNodeColor(d.type));
+        
+        // The actual icon path
+        node.append('path')
+            .attr('d', icon.path)
+            .attr('class', 'node-icon')
+            .attr('fill', '#ffffff')  // White icon
+            .attr('stroke', '#000000')  // Black outline
+            .attr('stroke-width', 0.5)
+            .attr('transform', `translate(-12, -12)`);  // Center the icon
+    });
     
     // Add node labels
     const nodeLabels = svg.select('g').selectAll('.node-label')
@@ -489,7 +540,7 @@ function visualizeGraph(graph) {
         .enter()
         .append('text')
         .attr('class', 'node-label')
-        .attr('dx', 12)
+        .attr('dx', 16)
         .attr('dy', 4)
         .text(d => d.id)
         .style('display', showLabels ? 'block' : 'none');
@@ -504,7 +555,7 @@ function visualizeGraph(graph) {
         .style('display', showLabels ? 'block' : 'none');
     
     // Add click event to nodes
-    node.on('click', (event, d) => {
+    nodeGroup.on('click', (event, d) => {
         showNodeDetails(d);
     });
     
@@ -527,9 +578,8 @@ function visualizeGraph(graph) {
             .attr('x2', d => d.target.x)
             .attr('y2', d => d.target.y);
         
-        node
-            .attr('cx', d => d.x)
-            .attr('cy', d => d.y);
+        nodeGroup
+            .attr('transform', d => `translate(${d.x}, ${d.y})`);
         
         nodeLabels
             .attr('x', d => d.x)
@@ -539,6 +589,17 @@ function visualizeGraph(graph) {
             .attr('x', d => (d.source.x + d.target.x) / 2)
             .attr('y', d => (d.source.y + d.target.y) / 2);
     });
+}
+
+// Helper function to get node color based on type
+function getNodeColor(type) {
+    switch(type) {
+        case 'host': return '#2ca02c';      // Green
+        case 'tor': return '#1f77b4';       // Blue
+        case 'aggregate': return '#ff7f0e'; // Orange
+        case 'core': return '#d62728';      // Red
+        default: return '#7f7f7f';          // Gray for unknown
+    }
 }
 
 // Apply Fat Tree layout with strict linear layers
@@ -959,6 +1020,7 @@ function resetView() {
     // Show a brief visual feedback to indicate the reset
     const button = document.querySelector('#reset-view-btn button');
     const originalText = button.textContent;
+    button.textContent = 'Reset Complete';
     button.style.backgroundColor = '#4CAF50';
     
     // Restore the button after a short delay
