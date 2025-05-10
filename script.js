@@ -87,7 +87,21 @@ function createLayoutSelector() {
     });
     
     layoutSelect.addEventListener('change', (e) => {
-        currentLayout = e.target.value;
+        const selectedLayout = e.target.value;
+        
+        // If Auto Detect is selected, determine the layout type
+        if (selectedLayout === 'auto' && graph) {
+            const detectedType = detectTopologyType(graph, currentTopology);
+            currentLayout = detectedType;
+            
+            // Update dropdown to show detected layout, without triggering another change event
+            const layoutSelector = document.getElementById('layout-selector');
+            layoutSelector.value = detectedType;
+        } else {
+            currentLayout = selectedLayout;
+        }
+        
+        // Redraw the graph with the new layout
         if (graph) {
             visualizeGraph(graph);
         }
@@ -145,6 +159,10 @@ function handleFileUpload(event) {
     reader.onload = (e) => {
         try {
             const data = JSON.parse(e.target.result);
+            
+            // Always reset to auto-detect for new files
+            currentLayout = 'auto';
+            
             loadTopology(data);
         } catch (error) {
             alert('Error parsing JSON file: ' + error.message);
@@ -232,12 +250,13 @@ function loadTopology(data) {
     // Build graph structure
     graph = buildGraph(currentTopology);
     
-    // Auto-detect topology type if set to auto
-    if (currentLayout === 'auto') {
-        const detectedType = detectTopologyType(graph, currentTopology);
-        document.getElementById('layout-selector').value = detectedType;
-        currentLayout = detectedType;
-    }
+    // Always auto-detect the topology type for newly loaded files
+    const detectedType = detectTopologyType(graph, currentTopology);
+    currentLayout = detectedType;
+    
+    // Update the dropdown to show the detected type
+    const layoutSelector = document.getElementById('layout-selector');
+    layoutSelector.value = detectedType;
     
     // Update UI with topology information
     updateTopologyInfo(currentTopology, graph);
@@ -254,33 +273,31 @@ function detectTopologyType(graph, topology) {
         nodeTypeCount[node.type] = (nodeTypeCount[node.type] || 0) + 1;
     });
     
-    // Check for specific node naming patterns
-    const hasFatTreeNaming = graph.nodes.some(n => 
-        (n.id.charAt(0) === 'c' || n.id.charAt(0) === 'a' || n.id.charAt(0) === 't') && 
-        !isNaN(parseInt(n.id.substring(1)))
-    );
+    // Check for specific node naming patterns by prefix
+    const prefixCounts = {};
+    graph.nodes.forEach(node => {
+        const prefix = node.id.charAt(0);
+        prefixCounts[prefix] = (prefixCounts[prefix] || 0) + 1;
+    });
     
-    const hasBinaryNaming = graph.nodes.some(n => 
-        (n.id.charAt(0) === 'a' || n.id.charAt(0) === 'b' || n.id.charAt(0) === 'c' || n.id.charAt(0) === 'd') && 
-        !isNaN(parseInt(n.id.substring(1)))
-    );
-    
-    const hasSimpleNaming = graph.nodes.some(n => 
-        n.id.charAt(0) === 's' && !isNaN(parseInt(n.id.substring(1)))
-    );
-    
-    // Check for fat tree structure (core, aggregation, edge layers)
-    if (hasFatTreeNaming && nodeTypeCount['core'] && nodeTypeCount['aggregate'] && nodeTypeCount['tor']) {
-        return 'fattree';
-    }
-    
-    // Check for binary tree structure
-    if (hasBinaryNaming && graph.nodes.length > 10) {
+    // Binary tree detection should take priority - check for 'b' prefixed nodes
+    // which are only used in binary tree topologies
+    if (prefixCounts['b']) {
         return 'binary';
     }
     
+    // Check for fat tree structure (core, aggregate, edge layers)
+    const hasFatTreeNaming = 
+        (prefixCounts['c'] && prefixCounts['a'] && prefixCounts['t']) ||
+        (nodeTypeCount['core'] && nodeTypeCount['aggregate'] && nodeTypeCount['tor']);
+    
+    if (hasFatTreeNaming) {
+        return 'fattree';
+    }
+    
     // Check for simple linear topology
-    if (hasSimpleNaming && graph.nodes.length < 10) {
+    const hasSimpleNaming = prefixCounts['s'] && prefixCounts['s'] < 10;
+    if (hasSimpleNaming) {
         return 'linear';
     }
     
@@ -522,7 +539,11 @@ function applyFatTreeLayout(graph) {
     const coreLayerY = height * 0.15;     // Core switches at top
     const aggregateLayerY = height * 0.4; // Aggregate switches below core
     const torLayerY = height * 0.65;      // ToR switches below aggregate
-    const hostLayerY = height * 0.9;      // Hosts at bottom
+    
+    // Ensure host layer aligns with grid lines by pre-snapping the value
+    // This ensures all hosts will be positioned at exactly the same grid line
+    const rawHostLayerY = height * 0.9;   // Raw value for hosts at bottom
+    const hostLayerY = Math.round(rawHostLayerY / gridSize) * gridSize; // Pre-snapped to grid
     
     // Get nodes by type
     const coreNodes = graph.nodes.filter(n => n.type === 'core');
@@ -643,15 +664,19 @@ function applyBinaryTreeLayout(graph) {
             return aNum - bNum;
         });
         
-        const yPosition = (levelIndex + 1) * verticalSpacing;
+        // Pre-snap Y positions to grid for consistency
+        const rawYPosition = (levelIndex + 1) * verticalSpacing;
+        const yPosition = Math.round(rawYPosition / gridSize) * gridSize;
+        
         positionNodesLinearly(nodesInLevel, width - 80, 40, yPosition);
     });
     
     // Handle hosts separately if they exist
     const hosts = graph.nodes.filter(n => n.type === 'host');
     if (hosts.length > 0) {
-        // Position hosts at the bottom
-        const hostLevelY = height * 0.9; // Bottom of the screen
+        // Position hosts at the bottom - pre-snap to grid
+        const rawHostLevelY = height * 0.9; // Bottom of the screen
+        const hostLevelY = Math.round(rawHostLevelY / gridSize) * gridSize;
         
         // Group hosts by their connected switch
         const hostToSwitchMap = new Map();
@@ -707,12 +732,14 @@ function applyLinearLayout(graph) {
     const hosts = graph.nodes.filter(n => n.type === 'host');
     const switches = graph.nodes.filter(n => n.type !== 'host');
     
-    // Position switches in the middle
-    const switchLayerY = height * 0.5;
+    // Position switches in the middle - pre-snap to grid
+    const rawSwitchLayerY = height * 0.5;
+    const switchLayerY = Math.round(rawSwitchLayerY / gridSize) * gridSize;
     positionNodesLinearly(switches, width - 80, 40, switchLayerY);
     
-    // Position hosts at the bottom
-    const hostLayerY = height * 0.8;
+    // Position hosts at the bottom - pre-snap to grid
+    const rawHostLayerY = height * 0.8;
+    const hostLayerY = Math.round(rawHostLayerY / gridSize) * gridSize;
     
     // Group hosts by their connected switch
     const hostToSwitchMap = new Map();
