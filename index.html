@@ -21,6 +21,47 @@
             <div id="properties-info">
                 <p>No topology loaded.</p>
             </div>
+            <!-- Add Node Panel -->
+            <div class="add-panel">
+                <h3>Add Node</h3>
+                <div class="form-group">
+                    <label for="node-id">Node ID:</label>
+                    <input type="text" id="node-id" placeholder="e.g., h5, t3, a2, c1, s4">
+                </div>
+                <div class="form-group">
+                    <label for="node-type">Node Type:</label>
+                    <select id="node-type">
+                        <option value="host">Host (h)</option>
+                        <option value="tor">ToR/Edge Switch (t)</option>
+                        <option value="aggregate">Aggregate Switch (a)</option>
+                        <option value="core">Core Switch (c)</option>
+                        <option value="switch">Generic Switch (s)</option>
+                    </select>
+                </div>
+                <button id="add-node-btn">Add Node</button>
+            </div>
+            
+            <!-- Add Link Panel -->
+            <div class="add-panel">
+                <h3>Add Link</h3>
+                <div class="form-group">
+                    <label for="link-source">Source Node:</label>
+                    <select id="link-source">
+                        <option value="">Select a node</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="link-target">Target Node:</label>
+                    <select id="link-target">
+                        <option value="">Select a node</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="link-bandwidth">Bandwidth (Mbps):</label>
+                    <input type="number" id="link-bandwidth" placeholder="Optional" min="1" max="100000">
+                </div>
+                <button id="add-link-btn">Add Link</button>
+            </div>
             <div class="legend">
                 <h3>Legend</h3>
                 <div class="legend-item">
@@ -65,6 +106,8 @@
                 <button class="grid-btn" id="toggle-grid-btn">Toggle Grid</button>
                 <button id="export-png-btn">Export as PNG</button>
                 <button id="export-jpeg-btn">Export as JPEG</button>
+                <button id="export-json-btn" class="export-btn">Export as JSON</button>
+                <button id="remove-node-btn" class="remove-btn">Remove Selected</button>
             </div>
             <div id="graph-container"></div>
             <div id="details-panel">

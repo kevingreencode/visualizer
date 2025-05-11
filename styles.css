@@ -141,6 +141,23 @@ pre {
 #export-png-btn:hover, #export-jpeg-btn:hover {
     background-color: #d32f2f;
 }
+
+/* New Export JSON button */
+#export-json-btn {
+    background-color: #ff9800;
+}
+#export-json-btn:hover {
+    background-color: #e68a00;
+}
+
+/* Remove selected node/link button */
+#remove-node-btn {
+    background-color: #d32f2f;
+}
+#remove-node-btn:hover {
+    background-color: #b71c1c;
+}
+
 /* Layout selector */
 #layout-selector {
     padding: 0.5rem;
@@ -156,4 +173,56 @@ pre {
 }
 .node.pulse {
     animation: pulse 1s ease-in-out;
+}
+
+/* Add node and link styles */
+.add-panel {
+    background-color: #f0f0f0;
+    border-radius: 5px;
+    padding: 10px;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+}
+
+.form-group {
+    margin-bottom: 10px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+#add-node-btn, #add-link-btn {
+    width: 100%;
+    margin-top: 5px;
+    background-color: #4CAF50;
+}
+
+/* Selected node styling */
+.node.selected {
+    stroke: #ff9800;
+    stroke-width: 3px;
+}
+
+/* Selected link styling */
+.link.selected {
+    stroke: #ff9800;
+    stroke-width: 3px;
+}
+
+/* Node hover effect */
+.node:hover {
+    stroke: #ff9800;
+    stroke-width: 2px;
 }
