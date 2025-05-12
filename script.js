@@ -60,7 +60,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('export-png-btn').addEventListener('click', () => exportTopology('png'));
     document.getElementById('export-jpeg-btn').addEventListener('click', () => exportTopology('jpeg'));
     document.getElementById('export-json-btn').addEventListener('click', exportTopologyAsJson);
-    document.getElementById('remove-node-btn').addEventListener('click', removeSelected);
+    // Update button text to make it clear it works for both nodes and links
+const removeBtn = document.getElementById('remove-node-btn');
+removeBtn.textContent = 'Remove Selected';
+removeBtn.title = 'Remove selected node or link';
+removeBtn.addEventListener('click', removeSelected);
 
     // Set up add node and link buttons
     document.getElementById('add-node-btn').addEventListener('click', addNewNode);
@@ -512,20 +516,32 @@ function addNodeToVisualization(newNode) {
         .attr('stroke', '#999')
         .attr('stroke-opacity', 0.6);
 
-    // Add click event to links
+    // Add click event to links with improved visual feedback
     link.on('click', (event, d) => {
         // Clear previous selection
         svg.selectAll('.selected').classed('selected', false);
 
-        // Mark this link as selected
-        d3.select(event.currentTarget).classed('selected', true);
+        // Mark this link as selected with enhanced visual feedback
+        const selectedLinkElement = d3.select(event.currentTarget);
+        selectedLinkElement.classed('selected', true);
+        selectedLinkElement
+            .attr('stroke-width', d => (d.properties.bw ? Math.sqrt(d.properties.bw) * 0.5 : 1) + 2)
+            .attr('stroke', '#ff6600')  // Bright orange for selected link
+            .attr('stroke-opacity', 1.0);
 
         // Update selection tracking
         selectedNode = null;
         selectedLink = d;
 
-        // Show link details
+        // Show link details with additional hint about removal
         showLinkDetails(d);
+
+        // Show a message in the details panel about link removal
+        const detailsPanel = document.getElementById('details-panel');
+        const tipElement = document.createElement('div');
+        tipElement.className = 'selection-tip';
+        tipElement.innerHTML = '<p style="color: #ff6600; font-weight: bold;">Click "Remove Selected" to delete this link.</p>';
+        detailsPanel.appendChild(tipElement);
 
         // Stop propagation to prevent other click events
         event.stopPropagation();
@@ -654,11 +670,23 @@ function addNodeToVisualization(newNode) {
             });
         }
 
-        link
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
+        // Update link positions, maintaining selection status
+        link.each(function(d) {
+            const linkElement = d3.select(this);
+            linkElement
+                .attr('x1', d.source.x)
+                .attr('y1', d.source.y)
+                .attr('x2', d.target.x)
+                .attr('y2', d.target.y);
+                
+            // Keep selected link highlighted
+            if (selectedLink === d) {
+                linkElement
+                    .attr('stroke', '#ff6600')
+                    .attr('stroke-opacity', 1.0)
+                    .attr('stroke-width', (d.properties.bw ? Math.sqrt(d.properties.bw) * 0.5 : 1) + 2);
+            }
+        });
 
         nodeGroup
             .attr('transform', d => `translate(${d.x}, ${d.y})`);
@@ -675,15 +703,27 @@ function addNodeToVisualization(newNode) {
     // Add click handler to SVG background to clear selection
     svg.on('click', (event) => {
         if (event.target === svg.node() || event.target.classList.contains('grid-line')) {
-            // Clear selection
+            // Reset all link styles to default when deselecting
+            svg.selectAll('.link').each(function() {
+                const link = d3.select(this);
+                const d = link.datum();
+                link
+                    .classed('selected', false)
+                    .attr('stroke', '#999')
+                    .attr('stroke-opacity', 0.6)
+                    .attr('stroke-width', d.properties.bw ? Math.sqrt(d.properties.bw) * 0.5 : 1);
+            });
+            
+            // Clear other selections
             svg.selectAll('.selected').classed('selected', false);
             selectedNode = null;
             selectedLink = null;
 
             // Update details panel
             document.getElementById('details-panel').innerHTML = `
-                <h3>Node Details</h3>
-                <p>Click on a node to see details.</p>
+                <h3>Details</h3>
+                <p>Click on a node or link to see details.</p>
+                <p><em>Tip: You can select a link by clicking on it, then remove it using the "Remove Selected" button.</em></p>
             `;
         }
     });
