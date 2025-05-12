@@ -21,6 +21,27 @@
             <div id="properties-info">
                 <p>No topology loaded.</p>
             </div>
+            
+            <!-- Add Network Configuration Panel -->
+            <div class="config-panel">
+                <h3>Network Configuration</h3>
+                <div class="form-group">
+                    <label for="assignment-strategy">Assignment Strategy:</label>
+                    <select id="assignment-strategy">
+                        <option value="l2">L2</option>
+                        <option value="l3">L3</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="auto-arp">Auto ARP Tables:</label>
+                    <input type="checkbox" id="auto-arp" checked>
+                </div>
+                <div class="form-group">
+                    <label for="queue-length">Default Queue Length:</label>
+                    <input type="number" id="queue-length" value="100" min="1" max="10000">
+                </div>
+            </div>
+            
             <!-- Add Node Panel -->
             <div class="add-panel">
                 <h3>Add Node</h3>

@@ -61,14 +61,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('export-jpeg-btn').addEventListener('click', () => exportTopology('jpeg'));
     document.getElementById('export-json-btn').addEventListener('click', exportTopologyAsJson);
     // Update button text to make it clear it works for both nodes and links
-const removeBtn = document.getElementById('remove-node-btn');
-removeBtn.textContent = 'Remove Selected';
-removeBtn.title = 'Remove selected node or link';
-removeBtn.addEventListener('click', removeSelected);
+    const removeBtn = document.getElementById('remove-node-btn');
+    removeBtn.textContent = 'Remove Selected';
+    removeBtn.title = 'Remove selected node or link';
+    removeBtn.addEventListener('click', removeSelected);
 
     // Set up add node and link buttons
     document.getElementById('add-node-btn').addEventListener('click', addNewNode);
     document.getElementById('add-link-btn').addEventListener('click', addNewLink);
+    
+    // New: Add event listeners for network configuration controls
+    document.getElementById('assignment-strategy').addEventListener('change', updateNetworkConfig);
+    document.getElementById('auto-arp').addEventListener('change', updateNetworkConfig);
+    document.getElementById('queue-length').addEventListener('change', updateNetworkConfig);
 
     // Create reset view button programmatically
     const resetViewBtn = document.createElement('button');
@@ -104,6 +109,34 @@ removeBtn.addEventListener('click', removeSelected);
     // Create a sample topology if no file is loaded
     createDefaultTopology();
 });
+
+// New: Function to handle network configuration updates
+function updateNetworkConfig() {
+    if (!currentTopology) return;
+
+    // Update topology object with new values
+    currentTopology.assignment_strategy = document.getElementById('assignment-strategy').value;
+    currentTopology.auto_arp_tables = document.getElementById('auto-arp').checked;
+    currentTopology.default_queue_length = parseInt(document.getElementById('queue-length').value);
+
+    // Update the properties info display
+    updateTopologyInfo(currentTopology, graph);
+}
+
+// New: Function to update configuration controls from topology data
+function updateConfigControls(topology) {
+    // Set assignment strategy dropdown
+    const assignmentStrategy = topology.assignment_strategy || 'l3';
+    document.getElementById('assignment-strategy').value = assignmentStrategy;
+    
+    // Set auto ARP tables checkbox
+    const autoArp = topology.auto_arp_tables !== undefined ? topology.auto_arp_tables : true;
+    document.getElementById('auto-arp').checked = autoArp;
+    
+    // Set default queue length input
+    const queueLength = topology.default_queue_length !== undefined ? topology.default_queue_length : 100;
+    document.getElementById('queue-length').value = queueLength;
+}
 
 // Create layout selector dropdown
 function createLayoutSelector() {
@@ -314,6 +347,9 @@ function loadTopology(data) {
 
     // Extract topology section
     currentTopology = data.topology || data;
+    
+    // New: Update configuration controls with values from the loaded topology
+    updateConfigControls(currentTopology);
 
     // Build graph structure
     graph = buildGraph(currentTopology);

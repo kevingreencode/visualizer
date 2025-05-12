@@ -176,7 +176,7 @@ pre {
 }
 
 /* Add node and link styles */
-.add-panel {
+.add-panel, .config-panel {
     background-color: #f0f0f0;
     border-radius: 5px;
     padding: 10px;
@@ -194,13 +194,20 @@ pre {
     font-weight: 500;
 }
 
-.form-group input,
+.form-group input[type="text"],
+.form-group input[type="number"],
 .form-group select {
     width: 100%;
     padding: 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
     box-sizing: border-box;
+}
+
+/* Make checkbox and its label appear on the same line */
+.form-group input[type="checkbox"] {
+    vertical-align: middle;
+    margin-left: 0;
 }
 
 #add-node-btn, #add-link-btn {
