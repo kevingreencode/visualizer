@@ -158,6 +158,14 @@ pre {
     background-color: #b71c1c;
 }
 
+/* Clear all button */
+#clear-all-btn {
+    background-color: #e91e63;
+}
+#clear-all-btn:hover {
+    background-color: #c2185b;
+}
+
 /* Layout selector */
 #layout-selector {
     padding: 0.5rem;

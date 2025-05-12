@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set up add node and link buttons
     document.getElementById('add-node-btn').addEventListener('click', addNewNode);
     document.getElementById('add-link-btn').addEventListener('click', addNewLink);
-    
+
     // New: Add event listeners for network configuration controls
     document.getElementById('assignment-strategy').addEventListener('change', updateNetworkConfig);
     document.getElementById('auto-arp').addEventListener('change', updateNetworkConfig);
@@ -108,6 +108,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Create a sample topology if no file is loaded
     createDefaultTopology();
+
+    document.getElementById('clear-all-btn').addEventListener('click', clearAllNodes);
+
+    // Remove everything
+    function clearAllNodes() {
+        if (!currentTopology) {
+            alert('No topology loaded.');
+            return;
+        }
+
+        const confirmClear = confirm('Are you sure you want to remove all nodes? This cannot be undone.');
+        if (!confirmClear) return;
+
+        // Create empty topology with current configuration settings
+        const assignment_strategy = currentTopology.assignment_strategy || 'l3';
+        const auto_arp_tables = currentTopology.auto_arp_tables !== undefined ? currentTopology.auto_arp_tables : true;
+        const default_queue_length = currentTopology.default_queue_length || 100;
+
+        // Create a new empty topology with the same configuration
+        const emptyTopology = {
+            "topology": {
+                "hosts": {},
+                "switches": {},
+                "links": [],
+                "assignment_strategy": assignment_strategy,
+                "auto_arp_tables": auto_arp_tables,
+                "default_queue_length": default_queue_length
+            }
+        };
+
+        // Load the empty topology
+        loadTopology(emptyTopology);
+
+        // Reset the lastDropPos so new nodes start from the beginning
+        if (graph) {
+            graph.lastDropPos = { x: gridSize, y: gridSize };
+        }
+
+        // Show confirmation message
+        document.getElementById('details-panel').innerHTML = `
+        <h3>Topology Cleared</h3>
+        <p>All nodes and links have been removed.</p>
+        <p>You can add new nodes using the Add Node panel.</p>
+    `;
+    }
 });
 
 // New: Function to handle network configuration updates
@@ -128,11 +173,11 @@ function updateConfigControls(topology) {
     // Set assignment strategy dropdown
     const assignmentStrategy = topology.assignment_strategy || 'l3';
     document.getElementById('assignment-strategy').value = assignmentStrategy;
-    
+
     // Set auto ARP tables checkbox
     const autoArp = topology.auto_arp_tables !== undefined ? topology.auto_arp_tables : true;
     document.getElementById('auto-arp').checked = autoArp;
-    
+
     // Set default queue length input
     const queueLength = topology.default_queue_length !== undefined ? topology.default_queue_length : 100;
     document.getElementById('queue-length').value = queueLength;
@@ -347,7 +392,7 @@ function loadTopology(data) {
 
     // Extract topology section
     currentTopology = data.topology || data;
-    
+
     // New: Update configuration controls with values from the loaded topology
     updateConfigControls(currentTopology);
 
@@ -525,7 +570,7 @@ function addNewNode() {
     // Update UI and redraw
     updateTopologyInfo(currentTopology, graph);
     updateNodeDropdowns();
-    
+
     // Instead of visualizeGraph, just add the new node to the visualization
     // This prevents re-layout of existing nodes
     addNodeToVisualization(newNode);
@@ -538,10 +583,10 @@ function addNewNode() {
 function addNodeToVisualization(newNode) {
     // Instead of adding just one node, redraw the visualization but preserve positions
     // This ensures that the simulation and drag behavior work correctly with all nodes
-    
+
     // Clear previous graph, but keep the grid
     svg.select('g').selectAll('*').remove();
-    
+
     // Create links first (so they appear under nodes)
     const link = svg.select('g').selectAll('.link')
         .data(graph.links)
@@ -707,14 +752,14 @@ function addNodeToVisualization(newNode) {
         }
 
         // Update link positions, maintaining selection status
-        link.each(function(d) {
+        link.each(function (d) {
             const linkElement = d3.select(this);
             linkElement
                 .attr('x1', d.source.x)
                 .attr('y1', d.source.y)
                 .attr('x2', d.target.x)
                 .attr('y2', d.target.y);
-                
+
             // Keep selected link highlighted
             if (selectedLink === d) {
                 linkElement
@@ -735,12 +780,12 @@ function addNodeToVisualization(newNode) {
             .attr('x', d => (d.source.x + d.target.x) / 2)
             .attr('y', d => (d.source.y + d.target.y) / 2);
     });
-    
+
     // Add click handler to SVG background to clear selection
     svg.on('click', (event) => {
         if (event.target === svg.node() || event.target.classList.contains('grid-line')) {
             // Reset all link styles to default when deselecting
-            svg.selectAll('.link').each(function() {
+            svg.selectAll('.link').each(function () {
                 const link = d3.select(this);
                 const d = link.datum();
                 link
@@ -749,7 +794,7 @@ function addNodeToVisualization(newNode) {
                     .attr('stroke-opacity', 0.6)
                     .attr('stroke-width', d.properties.bw ? Math.sqrt(d.properties.bw) * 0.5 : 1);
             });
-            
+
             // Clear other selections
             svg.selectAll('.selected').classed('selected', false);
             selectedNode = null;
@@ -763,7 +808,7 @@ function addNodeToVisualization(newNode) {
             `;
         }
     });
-    
+
     // Start the simulation with low alpha to just update positions
     simulation.alpha(0.3).restart();
 }
@@ -772,11 +817,11 @@ function addNodeToVisualization(newNode) {
 function getNextPortNumber(nodeId) {
     const node = graph.nodes.find(n => n.id === nodeId);
     if (!node) return 1;
-    
+
     // Get all used port numbers for this node
     const usedPorts = Object.values(node.ports);
     if (usedPorts.length === 0) return 1;
-    
+
     // Return the next available port number
     return Math.max(...usedPorts) + 1;
 }
@@ -856,7 +901,7 @@ function addNewLink() {
 
     // Update UI 
     updateTopologyInfo(currentTopology, graph);
-    
+
     // Add the new link to the visualization instead of redrawing everything
     addLinkToVisualization(linkObj);
 
@@ -870,7 +915,7 @@ function addNewLink() {
 function addLinkToVisualization(newLink) {
     // Similar to addNodeToVisualization, we'll redraw everything to ensure
     // the simulation and elements all work correctly together
-    
+
     // Call the same visualization approach we use for adding nodes
     // This ensures consistency and proper drag behavior
     addNodeToVisualization(null);
@@ -1109,7 +1154,7 @@ function buildGraph(topology) {
             config: topology.hosts[hostId],
             ports: {} // Store port assignments
         };
-        
+
         // Restore position if it exists
         if (nodePositions[hostId]) {
             node.x = nodePositions[hostId].x;
@@ -1117,7 +1162,7 @@ function buildGraph(topology) {
             node.fx = nodePositions[hostId].fx;
             node.fy = nodePositions[hostId].fy;
         }
-        
+
         nodes.push(node);
     }
 
@@ -1129,7 +1174,7 @@ function buildGraph(topology) {
             config: topology.switches[switchId],
             ports: {} // Store port assignments
         };
-        
+
         // Restore position if it exists
         if (nodePositions[switchId]) {
             node.x = nodePositions[switchId].x;
@@ -1137,7 +1182,7 @@ function buildGraph(topology) {
             node.fx = nodePositions[switchId].fx;
             node.fy = nodePositions[switchId].fy;
         }
-        
+
         nodes.push(node);
     }
 
@@ -1335,11 +1380,11 @@ function visualizeGraph(graph) {
 
     // Only apply layout to nodes without positions
     const newNodes = graph.nodes.filter(node => node.x === undefined || node.y === undefined);
-    
+
     // Store existing node positions before applying any layout
     const positionedNodes = graph.nodes.filter(node => node.x !== undefined && node.y !== undefined);
     const existingPositions = {};
-    
+
     positionedNodes.forEach(node => {
         existingPositions[node.id] = {
             x: node.x,
