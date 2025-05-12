@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('export-jpeg-btn').addEventListener('click', () => exportTopology('jpeg'));
     document.getElementById('export-json-btn').addEventListener('click', exportTopologyAsJson);
     document.getElementById('remove-node-btn').addEventListener('click', removeSelected);
-    
+
     // Set up add node and link buttons
     document.getElementById('add-node-btn').addEventListener('click', addNewNode);
     document.getElementById('add-link-btn').addEventListener('click', addNewLink);
@@ -288,6 +288,22 @@ function updateGrid() {
 
 // Load topology data and build the graph
 function loadTopology(data) {
+    // Save existing node positions if we have a current graph
+    const nodePositions = {};
+    if (graph && graph.nodes) {
+        graph.nodes.forEach(node => {
+            // Only save positions if they've been set by the user
+            if (node.fx !== null || node.fy !== null) {
+                nodePositions[node.id] = {
+                    x: node.x,
+                    y: node.y,
+                    fx: node.fx,
+                    fy: node.fy
+                };
+            }
+        });
+    }
+
     // Reset any selection
     selectedNode = null;
     selectedLink = null;
@@ -297,6 +313,18 @@ function loadTopology(data) {
 
     // Build graph structure
     graph = buildGraph(currentTopology);
+
+    // Restore saved positions for nodes still in the graph
+    if (Object.keys(nodePositions).length > 0) {
+        graph.nodes.forEach(node => {
+            if (nodePositions[node.id]) {
+                node.x = nodePositions[node.id].x;
+                node.y = nodePositions[node.id].y;
+                node.fx = nodePositions[node.id].fx;
+                node.fy = nodePositions[node.id].fy;
+            }
+        });
+    }
 
     // Always auto-detect the topology type for newly loaded files
     const detectedType = detectTopologyType(graph, currentTopology);
@@ -392,7 +420,7 @@ function addNewNode() {
 
     // Determine where to add node (hosts or switches)
     const addToHosts = nodeType === 'host';
-    
+
     // Add to topology data
     if (addToHosts) {
         if (!currentTopology.hosts) {
@@ -414,40 +442,42 @@ function addNewNode() {
         ports: {}
     };
 
-    // Set initial position based on layout
-    // For example, in fattree layout, place in expected layer
-    if (currentLayout === 'fattree') {
-        const layerPositions = {
-            'host': height * 0.8,
-            'tor': height * 0.6,
-            'aggregate': height * 0.4,
-            'core': height * 0.2,
-            'switch': height * 0.5
-        };
-        
-        // Place node in center of screen horizontally, at appropriate layer vertically
-        newNode.x = width / 2;
-        newNode.y = layerPositions[nodeType] || height / 2;
-        
-        // Snap to grid if needed
-        if (snapToGrid) {
-            newNode.x = Math.round(newNode.x / gridSize) * gridSize;
-            newNode.y = Math.round(newNode.y / gridSize) * gridSize;
-        }
-        
-        // Fix position for initial placement
-        newNode.fx = newNode.x;
-        newNode.fy = newNode.y;
+    //-------------------------------------------------------------------
+    //  TOP-LEFT-QUADRANT PLACEMENT – look only at the last node we added
+    //-------------------------------------------------------------------
+    const margin = gridSize;          // one grid square of padding
+    const spacing = gridSize * 4;      // how far to nudge each time
+
+    // the "quadrant" boundaries
+    const maxX = width / 2 - margin;
+    const maxY = height / 2 - margin;
+
+    // keep track of the previous drop point on the graph object itself
+    if (!graph.lastDropPos) {
+        // first ever click – start in the corner
+        graph.lastDropPos = { x: margin, y: margin };
     } else {
-        // For other layouts, set position near center of screen
-        newNode.x = width / 2 + (Math.random() - 0.5) * 100;
-        newNode.y = height / 2 + (Math.random() - 0.5) * 100;
-        
-        if (snapToGrid) {
-            newNode.x = Math.round(newNode.x / gridSize) * gridSize;
-            newNode.y = Math.round(newNode.y / gridSize) * gridSize;
+        // nudge right
+        graph.lastDropPos.x += spacing;
+
+        // if that would leave the quadrant, move to a new line
+        if (graph.lastDropPos.x > maxX) {
+            graph.lastDropPos.x = margin;              // back to the left edge
+            graph.lastDropPos.y += spacing;            // one row down
+            // make sure we never leave the quadrant vertically, either
+            if (graph.lastDropPos.y > maxY) {
+                graph.lastDropPos.y = maxY;            // clamp to the last visible row
+            }
         }
     }
+
+    // finally assign the coords to the new node
+    newNode.x = graph.lastDropPos.x;
+    newNode.y = graph.lastDropPos.y;
+    newNode.fx = newNode.x;   // keep it fixed until the user drags it
+    newNode.fy = newNode.y;
+
+    newNode._userAdded = true;   // optional flag if you need it elsewhere
 
     // Add the node to the graph
     graph.nodes.push(newNode);
@@ -455,10 +485,224 @@ function addNewNode() {
     // Update UI and redraw
     updateTopologyInfo(currentTopology, graph);
     updateNodeDropdowns();
-    visualizeGraph(graph);
+    
+    // Instead of visualizeGraph, just add the new node to the visualization
+    // This prevents re-layout of existing nodes
+    addNodeToVisualization(newNode);
 
     // Clear input field
     document.getElementById('node-id').value = '';
+}
+
+// New function to add a single node to the visualization
+function addNodeToVisualization(newNode) {
+    // Instead of adding just one node, redraw the visualization but preserve positions
+    // This ensures that the simulation and drag behavior work correctly with all nodes
+    
+    // Clear previous graph, but keep the grid
+    svg.select('g').selectAll('*').remove();
+    
+    // Create links first (so they appear under nodes)
+    const link = svg.select('g').selectAll('.link')
+        .data(graph.links)
+        .enter()
+        .append('line')
+        .attr('class', 'link')
+        .attr('stroke-width', d => d.properties.bw ? Math.sqrt(d.properties.bw) * 0.5 : 1)
+        .attr('stroke', '#999')
+        .attr('stroke-opacity', 0.6);
+
+    // Add click event to links
+    link.on('click', (event, d) => {
+        // Clear previous selection
+        svg.selectAll('.selected').classed('selected', false);
+
+        // Mark this link as selected
+        d3.select(event.currentTarget).classed('selected', true);
+
+        // Update selection tracking
+        selectedNode = null;
+        selectedLink = d;
+
+        // Show link details
+        showLinkDetails(d);
+
+        // Stop propagation to prevent other click events
+        event.stopPropagation();
+    });
+
+    // Create node groups
+    const nodeGroup = svg.select('g').selectAll('.node-group')
+        .data(graph.nodes)
+        .enter()
+        .append('g')
+        .attr('class', 'node-group')
+        .attr('transform', d => `translate(${d.x}, ${d.y})`)
+        .call(d3.drag()
+            .on('start', dragstarted)
+            .on('drag', dragged)
+            .on('end', dragended));
+
+    // Add node icon
+    nodeGroup.each(function (d) {
+        const node = d3.select(this);
+        const iconType = d.type === 'host' ? 'host' :
+            (d.type === 'core' ? 'core' :
+                d.type === 'aggregate' ? 'aggregate' :
+                    d.type === 'tor' ? 'tor' : 'switch');
+
+        const icon = svgIcons[iconType];
+
+        // Background circle for easier selection and consistent coloring
+        node.append('circle')
+            .attr('class', 'node')
+            .attr('r', 14)
+            .attr('fill', getNodeColor(d.type));
+
+        // The actual icon path
+        node.append('path')
+            .attr('d', icon.path)
+            .attr('class', 'node-icon')
+            .attr('fill', '#ffffff')  // White icon
+            .attr('stroke', '#000000')  // Black outline
+            .attr('stroke-width', 0.5)
+            .attr('transform', `translate(-12, -12)`);  // Center the icon
+    });
+
+    // Add node labels
+    const nodeLabels = svg.select('g').selectAll('.node-label')
+        .data(graph.nodes)
+        .enter()
+        .append('text')
+        .attr('class', 'node-label')
+        .attr('x', d => d.x)
+        .attr('y', d => d.y)
+        .attr('dx', 16)
+        .attr('dy', 4)
+        .text(d => d.id)
+        .style('display', showLabels ? 'block' : 'none');
+
+    // Add bandwidth labels to links
+    const linkLabels = svg.select('g').selectAll('.bandwidth-label')
+        .data(graph.links.filter(d => d.properties.bw))
+        .enter()
+        .append('text')
+        .attr('class', 'bandwidth-label')
+        .text(d => `${d.properties.bw} Mbps`)
+        .style('display', showLabels ? 'block' : 'none')
+        .attr('x', d => (d.source.x + d.target.x) / 2)
+        .attr('y', d => (d.source.y + d.target.y) / 2);
+
+    // Add click event to nodes
+    nodeGroup.on('click', (event, d) => {
+        // Clear previous selection
+        svg.selectAll('.selected').classed('selected', false);
+
+        // Mark this node as selected
+        d3.select(event.currentTarget).select('.node').classed('selected', true);
+
+        // Update selection tracking
+        selectedNode = d;
+        selectedLink = null;
+
+        // Show node details
+        showNodeDetails(d);
+
+        // Stop propagation to prevent other click events
+        event.stopPropagation();
+    });
+
+    // Set up simulation with the updated nodes and links
+    if (simulation) {
+        simulation.stop();
+    }
+
+    simulation = d3.forceSimulation(graph.nodes)
+        .force('link', d3.forceLink(graph.links).id(d => d.id).distance(100))
+        .force('x', d3.forceX(d => d.x).strength(0.5))
+        .force('charge', d3.forceManyBody().strength(-50));
+
+    // Only add Y force for non-fat tree layouts
+    if (currentLayout !== 'fattree') {
+        simulation.force('y', d3.forceY(d => d.y).strength(0.5));
+    }
+
+    simulation.alphaDecay(0.1); // Faster settling
+
+    // Update simulation on each tick
+    simulation.on('tick', () => {
+        // For fat tree layout, ensure Y positions stay fixed
+        if (currentLayout === 'fattree') {
+            graph.nodes.forEach(d => {
+                // Keep Y position fixed for fat tree layout
+                if (d.fy !== undefined) {
+                    d.y = d.fy;
+                }
+            });
+        }
+
+        // Snap nodes to grid if enabled
+        if (snapToGrid) {
+            graph.nodes.forEach(d => {
+                // Only snap nodes that are not being dragged
+                if (!d.isDragging) {
+                    d.x = Math.round(d.x / gridSize) * gridSize;
+                    if (currentLayout !== 'fattree') {
+                        d.y = Math.round(d.y / gridSize) * gridSize;
+                    }
+                }
+            });
+        }
+
+        link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+        nodeGroup
+            .attr('transform', d => `translate(${d.x}, ${d.y})`);
+
+        nodeLabels
+            .attr('x', d => d.x)
+            .attr('y', d => d.y);
+
+        linkLabels
+            .attr('x', d => (d.source.x + d.target.x) / 2)
+            .attr('y', d => (d.source.y + d.target.y) / 2);
+    });
+    
+    // Add click handler to SVG background to clear selection
+    svg.on('click', (event) => {
+        if (event.target === svg.node() || event.target.classList.contains('grid-line')) {
+            // Clear selection
+            svg.selectAll('.selected').classed('selected', false);
+            selectedNode = null;
+            selectedLink = null;
+
+            // Update details panel
+            document.getElementById('details-panel').innerHTML = `
+                <h3>Node Details</h3>
+                <p>Click on a node to see details.</p>
+            `;
+        }
+    });
+    
+    // Start the simulation with low alpha to just update positions
+    simulation.alpha(0.3).restart();
+}
+
+// Helper function to get the next available port number for a node
+function getNextPortNumber(nodeId) {
+    const node = graph.nodes.find(n => n.id === nodeId);
+    if (!node) return 1;
+    
+    // Get all used port numbers for this node
+    const usedPorts = Object.values(node.ports);
+    if (usedPorts.length === 0) return 1;
+    
+    // Return the next available port number
+    return Math.max(...usedPorts) + 1;
 }
 
 // Add a new link to the topology
@@ -484,8 +728,8 @@ function addNewLink() {
     }
 
     // Check if link already exists
-    const linkExists = currentTopology.links.some(link => 
-        (link[0] === sourceId && link[1] === targetId) || 
+    const linkExists = currentTopology.links.some(link =>
+        (link[0] === sourceId && link[1] === targetId) ||
         (link[0] === targetId && link[1] === sourceId)
     );
 
@@ -505,30 +749,55 @@ function addNewLink() {
     // Add to topology data
     currentTopology.links.push(newLink);
 
+    // Find the actual node objects in the graph
+    const sourceNode = graph.nodes.find(n => n.id === sourceId);
+    const targetNode = graph.nodes.find(n => n.id === targetId);
+
+    // Assign port numbers
+    // Simplified version for addNewLink - we'll use the actual implementation based on your existing code
+    const sourcePort = getNextPortNumber(sourceId);
+    const targetPort = getNextPortNumber(targetId);
+
+    // Store port assignments in the nodes
+    if (sourceNode) {
+        sourceNode.ports[targetId] = sourcePort;
+    }
+    if (targetNode) {
+        targetNode.ports[sourceId] = targetPort;
+    }
+
     // Create the link object for the graph
     const linkObj = {
-        source: sourceId,
-        target: targetId,
+        source: sourceNode,
+        target: targetNode,
         properties: bandwidth && !isNaN(parseInt(bandwidth)) ? { bw: parseInt(bandwidth) } : {},
-        sourcePort: 0, // Will be assigned automatically in buildGraph
-        targetPort: 0
+        sourcePort: sourcePort,
+        targetPort: targetPort
     };
 
     // Add the link to the graph
     graph.links.push(linkObj);
 
-    // Rebuild the graph to assign port numbers correctly
-    graph = buildGraph(currentTopology);
-
-    // Update UI and redraw
+    // Update UI 
     updateTopologyInfo(currentTopology, graph);
-    visualizeGraph(graph);
+    
+    // Add the new link to the visualization instead of redrawing everything
+    addLinkToVisualization(linkObj);
 
     // Reset form
     document.getElementById('link-source').value = '';
     document.getElementById('link-target').value = '';
     document.getElementById('link-bandwidth').value = '';
+}
 
+// New function to add a single link to the visualization
+function addLinkToVisualization(newLink) {
+    // Similar to addNodeToVisualization, we'll redraw everything to ensure
+    // the simulation and elements all work correctly together
+    
+    // Call the same visualization approach we use for adding nodes
+    // This ensures consistency and proper drag behavior
+    addNodeToVisualization(null);
 }
 
 // Remove selected node or link
@@ -541,67 +810,125 @@ function removeSelected() {
     // Check if a node is selected
     if (selectedNode) {
         const nodeId = selectedNode.id;
-        
+
         // Check if node has links connected to it
         const hasLinks = graph.links.some(link => {
             const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
             const targetId = typeof link.target === 'object' ? link.target.id : link.target;
             return sourceId === nodeId || targetId === nodeId;
         });
-        
+
         if (hasLinks) {
             const confirmRemove = confirm(`Node "${nodeId}" has links connected to it. Removing it will also remove these links. Continue?`);
             if (!confirmRemove) return;
         }
-        
+
+        // Store positions of all nodes
+        const nodePositions = {};
+        graph.nodes.forEach(node => {
+            nodePositions[node.id] = {
+                x: node.x,
+                y: node.y,
+                fx: node.fx,
+                fy: node.fy
+            };
+        });
+
         // Remove node from topology
         if (nodeId.charAt(0) === 'h' || currentTopology.hosts && currentTopology.hosts[nodeId]) {
             delete currentTopology.hosts[nodeId];
         } else {
             delete currentTopology.switches[nodeId];
         }
-        
+
         // Remove connected links from topology
-        currentTopology.links = currentTopology.links.filter(link => 
+        currentTopology.links = currentTopology.links.filter(link =>
             link[0] !== nodeId && link[1] !== nodeId
         );
-        
-        // Rebuild graph
-        graph = buildGraph(currentTopology);
+
+        // Remove node from graph
+        graph.nodes = graph.nodes.filter(node => node.id !== nodeId);
+
+        // Remove connected links from graph
+        graph.links = graph.links.filter(link => {
+            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+            return sourceId !== nodeId && targetId !== nodeId;
+        });
+
+        // Restore positions for remaining nodes
+        graph.nodes.forEach(node => {
+            if (nodePositions[node.id]) {
+                node.x = nodePositions[node.id].x;
+                node.y = nodePositions[node.id].y;
+                node.fx = nodePositions[node.id].fx;
+                node.fy = nodePositions[node.id].fy;
+            }
+        });
+
         updateTopologyInfo(currentTopology, graph);
         updateNodeDropdowns();
         visualizeGraph(graph);
-        
+
         // Clear selection
         selectedNode = null;
-        
+
         // Update details panel
         document.getElementById('details-panel').innerHTML = `
             <h3>Node Details</h3>
             <p>Node "${nodeId}" removed. Click on a node to see details.</p>
         `;
-    } 
+    }
     // Check if a link is selected
     else if (selectedLink) {
-        const sourceId = typeof selectedLink.source === 'object' ? 
+        const sourceId = typeof selectedLink.source === 'object' ?
             selectedLink.source.id : selectedLink.source;
-        const targetId = typeof selectedLink.target === 'object' ? 
+        const targetId = typeof selectedLink.target === 'object' ?
             selectedLink.target.id : selectedLink.target;
-        
+
+        // Store positions of all nodes
+        const nodePositions = {};
+        graph.nodes.forEach(node => {
+            nodePositions[node.id] = {
+                x: node.x,
+                y: node.y,
+                fx: node.fx,
+                fy: node.fy
+            };
+        });
+
         // Remove link from topology
-        currentTopology.links = currentTopology.links.filter(link => 
-            !(link[0] === sourceId && link[1] === targetId) && 
+        currentTopology.links = currentTopology.links.filter(link =>
+            !(link[0] === sourceId && link[1] === targetId) &&
             !(link[0] === targetId && link[1] === sourceId)
         );
-        
-        // Rebuild graph
-        graph = buildGraph(currentTopology);
+
+        // Remove link from graph
+        graph.links = graph.links.filter(link => {
+            const linkSourceId = typeof link.source === 'object' ? link.source.id : link.source;
+            const linkTargetId = typeof link.target === 'object' ? link.target.id : link.target;
+            return !(
+                (linkSourceId === sourceId && linkTargetId === targetId) ||
+                (linkSourceId === targetId && linkTargetId === sourceId)
+            );
+        });
+
+        // Restore positions for all nodes
+        graph.nodes.forEach(node => {
+            if (nodePositions[node.id]) {
+                node.x = nodePositions[node.id].x;
+                node.y = nodePositions[node.id].y;
+                node.fx = nodePositions[node.id].fx;
+                node.fy = nodePositions[node.id].fy;
+            }
+        });
+
         updateTopologyInfo(currentTopology, graph);
         visualizeGraph(graph);
-        
+
         // Clear selection
         selectedLink = null;
-        
+
         // Update details panel
         document.getElementById('details-panel').innerHTML = `
             <h3>Link Details</h3>
@@ -618,24 +945,24 @@ function exportTopologyAsJson() {
         alert('No topology loaded.');
         return;
     }
-    
+
     // Create JSON data
     const jsonData = {
         topology: currentTopology
     };
-    
+
     // Convert to JSON string
     const jsonString = JSON.stringify(jsonData, null, 2);
-    
+
     // Create download link
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    
+
     const link = document.createElement('a');
     link.href = url;
     link.download = 'network-topology.json';
     link.click();
-    
+
     // Clean up
     URL.revokeObjectURL(url);
 }
@@ -682,27 +1009,60 @@ function detectTopologyType(graph, topology) {
 
 // Build graph structure from topology data
 function buildGraph(topology) {
+    // Store positions of existing nodes
+    const nodePositions = {};
+    if (graph && graph.nodes) {
+        graph.nodes.forEach(node => {
+            nodePositions[node.id] = {
+                x: node.x,
+                y: node.y,
+                fx: node.fx,
+                fy: node.fy
+            };
+        });
+    }
+
     const nodes = [];
     const links = [];
 
     // Add hosts to nodes
     for (const hostId in topology.hosts) {
-        nodes.push({
+        const node = {
             id: hostId,
             type: getNodeType(hostId, topology),
             config: topology.hosts[hostId],
             ports: {} // Store port assignments
-        });
+        };
+        
+        // Restore position if it exists
+        if (nodePositions[hostId]) {
+            node.x = nodePositions[hostId].x;
+            node.y = nodePositions[hostId].y;
+            node.fx = nodePositions[hostId].fx;
+            node.fy = nodePositions[hostId].fy;
+        }
+        
+        nodes.push(node);
     }
 
     // Add switches to nodes
     for (const switchId in topology.switches) {
-        nodes.push({
+        const node = {
             id: switchId,
             type: getNodeType(switchId, topology),
             config: topology.switches[switchId],
             ports: {} // Store port assignments
-        });
+        };
+        
+        // Restore position if it exists
+        if (nodePositions[switchId]) {
+            node.x = nodePositions[switchId].x;
+            node.y = nodePositions[switchId].y;
+            node.fx = nodePositions[switchId].fx;
+            node.fy = nodePositions[switchId].fy;
+        }
+        
+        nodes.push(node);
     }
 
     // Track port assignments for each node
@@ -747,6 +1107,13 @@ function buildGraph(topology) {
             targetPort
         });
     });
+
+    // Preserve lastDropPos if it existed
+    if (graph && graph.lastDropPos) {
+        const newGraph = { nodes, links };
+        newGraph.lastDropPos = graph.lastDropPos;
+        return newGraph;
+    }
 
     return { nodes, links };
 }
@@ -890,56 +1257,71 @@ function visualizeGraph(graph) {
     selectedNode = null;
     selectedLink = null;
 
-    // Reset all node constraints and positions when switching layouts
-    if (graph && graph.nodes) {
-        graph.nodes.forEach(node => {
-            // Clear any fixed positions from previous layouts
-            node.fx = null;
-            node.fy = null;
-            node.isDragging = false;
-        });
+    // Only apply layout to nodes without positions
+    const newNodes = graph.nodes.filter(node => node.x === undefined || node.y === undefined);
+    
+    // Store existing node positions before applying any layout
+    const positionedNodes = graph.nodes.filter(node => node.x !== undefined && node.y !== undefined);
+    const existingPositions = {};
+    
+    positionedNodes.forEach(node => {
+        existingPositions[node.id] = {
+            x: node.x,
+            y: node.y,
+            fx: node.fx,
+            fy: node.fy
+        };
+    });
+
+    // Apply layout based on selected type only for new nodes
+    if (newNodes.length > 0) {
+        switch (currentLayout) {
+            case 'fattree':
+                applyFatTreeLayout(graph);
+                break;
+            case 'binary':
+                applyBinaryTreeLayout(graph);
+                break;
+            case 'linear':
+                applyLinearLayout(graph);
+                break;
+            case 'force':
+            default:
+                applyForceDirectedLayout(graph);
+                break;
+        }
     }
 
-    // Apply layout based on selected type
-    switch (currentLayout) {
-        case 'fattree':
-            applyFatTreeLayout(graph);
-            break;
-        case 'binary':
-            applyBinaryTreeLayout(graph);
-            break;
-        case 'linear':
-            applyLinearLayout(graph);
-            break;
-        case 'force':
-        default:
-            applyForceDirectedLayout(graph);
-            break;
-    }
-
-    // Snap initial positions to grid and fix Y positions for fat tree
-    if (snapToGrid) {
-        graph.nodes.forEach(node => {
+    // Restore existing node positions after layout
+    graph.nodes.forEach(node => {
+        if (existingPositions[node.id]) {
+            node.x = existingPositions[node.id].x;
+            node.y = existingPositions[node.id].y;
+            node.fx = existingPositions[node.id].fx;
+            node.fy = existingPositions[node.id].fy;
+        }
+        // For nodes without positions, snap to grid if needed
+        else if (snapToGrid && node.layoutX && node.layoutY) {
             node.x = Math.round(node.layoutX / gridSize) * gridSize;
             node.y = Math.round(node.layoutY / gridSize) * gridSize;
             // For fat tree layout, prevent vertical movement by fixing Y position
             if (currentLayout === 'fattree') {
                 node.fy = node.y;  // Fix Y position
             }
-        });
-    } else {
-        graph.nodes.forEach(node => {
+        } else if (node.layoutX && node.layoutY) {
             node.x = node.layoutX;
             node.y = node.layoutY;
             // For fat tree layout, prevent vertical movement
             if (currentLayout === 'fattree') {
                 node.fy = node.y;  // Fix Y position
             }
-        });
-    }
+        }
+    });
 
-    // Auto-zoom to fit the topology
-    autoZoomToFit(graph);
+    // Auto-zoom to fit the topology if there are new nodes
+    if (newNodes.length > 0) {
+        autoZoomToFit(graph);
+    }
 
     // Set up force simulation with constraints for fat tree
     if (simulation) {
@@ -972,17 +1354,17 @@ function visualizeGraph(graph) {
     link.on('click', (event, d) => {
         // Clear previous selection
         svg.selectAll('.selected').classed('selected', false);
-        
+
         // Mark this link as selected
         d3.select(event.currentTarget).classed('selected', true);
-        
+
         // Update selection tracking
         selectedNode = null;
         selectedLink = d;
-        
+
         // Show link details
         showLinkDetails(d);
-        
+
         // Stop propagation to prevent other click events
         event.stopPropagation();
     });
@@ -1048,17 +1430,17 @@ function visualizeGraph(graph) {
     nodeGroup.on('click', (event, d) => {
         // Clear previous selection
         svg.selectAll('.selected').classed('selected', false);
-        
+
         // Mark this node as selected
         d3.select(event.currentTarget).select('.node').classed('selected', true);
-        
+
         // Update selection tracking
         selectedNode = d;
         selectedLink = null;
-        
+
         // Show node details
         showNodeDetails(d);
-        
+
         // Stop propagation to prevent other click events
         event.stopPropagation();
     });
@@ -1070,7 +1452,7 @@ function visualizeGraph(graph) {
             svg.selectAll('.selected').classed('selected', false);
             selectedNode = null;
             selectedLink = null;
-            
+
             // Update details panel
             document.getElementById('details-panel').innerHTML = `
                 <h3>Node Details</h3>
@@ -1784,11 +2166,11 @@ function showLinkDetails(link) {
     const detailsPanel = document.getElementById('details-panel');
     const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-    
+
     // Get node types
     const sourceNode = graph.nodes.find(n => n.id === sourceId);
     const targetNode = graph.nodes.find(n => n.id === targetId);
-    
+
     const nodeTypeMap = {
         'host': 'Host',
         'tor': 'Top of Rack (ToR) Switch',
@@ -1796,27 +2178,27 @@ function showLinkDetails(link) {
         'core': 'Core Switch',
         'switch': 'Switch'
     };
-    
+
     const sourceType = sourceNode ? nodeTypeMap[sourceNode.type] || sourceNode.type : 'unknown';
     const targetType = targetNode ? nodeTypeMap[targetNode.type] || targetNode.type : 'unknown';
-    
+
     let html = `<h3>Link Details</h3>`;
     html += `<p><strong>Connection:</strong> ${sourceId} (${sourceType}) ↔ ${targetId} (${targetType})</p>`;
     html += `<p><strong>Ports:</strong> ${sourceId}:${link.sourcePort} ↔ ${targetId}:${link.targetPort}</p>`;
-    
+
     // Show bandwidth if available
     if (link.properties && link.properties.bw) {
         html += `<p><strong>Bandwidth:</strong> ${link.properties.bw} Mbps</p>`;
     } else {
         html += `<p><strong>Bandwidth:</strong> Default</p>`;
     }
-    
+
     // Show any other properties
     if (link.properties && Object.keys(link.properties).length > 0) {
         html += `<p><strong>Properties:</strong></p>`;
         html += `<pre>${JSON.stringify(link.properties, null, 2)}</pre>`;
     }
-    
+
     detailsPanel.innerHTML = html;
 }
 
