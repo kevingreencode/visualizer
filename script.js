@@ -1,4 +1,4 @@
-// Global variables
+// vars for the app
 let simulation;
 let svg;
 let width;
@@ -7,39 +7,35 @@ let currentTopology = null;
 let graph = null;
 let showLabels = true;
 let showGrid = true;
-let gridSize = 40; // Default grid size
-let snapToGrid = true; // Default snap to grid setting
-let currentLayout = 'auto'; // Added to track current layout
-let selectedNode = null; // To track selected node
-let selectedLink = null; // To track selected link
+let gridSize = 40; // grid size
+let snapToGrid = true; // snap to grid setting
+let currentLayout = 'auto'; // track current layout
+let selectedNode = null; // track selected node
+let selectedLink = null; // track selected link
+// TODO: add option to change grid color
 
-// SVG icon definitions
+// SVG icons
 const svgIcons = {
-    // Host icon (server/computer)
     host: {
         path: 'M2,2 v16 h20 v-16 z M4,4 h16 v10 h-16 z M10,15 h4 v3 h-4 z',
         viewBox: '0 0 24 24',
         size: 24
     },
-    // Switch icon (network switch)
     switch: {
         path: 'M2,6 v12 h20 v-12 z M4,8 h16 v8 h-16 z M6,10 v4 h2 v-4 z M10,10 v4 h2 v-4 z M14,10 v4 h2 v-4 z M18,10 v4 h2 v-4 z',
         viewBox: '0 0 24 24',
         size: 24
     },
-    // Core switch icon (slightly different)
     core: {
         path: 'M2,6 v12 h20 v-12 z M4,8 h16 v8 h-16 z M6,10 v4 h2 v-4 z M10,10 v4 h2 v-4 z M14,10 v4 h2 v-4 z M18,10 v4 h2 v-4 z M2,3 h20 v2 h-20 z M2,19 h20 v2 h-20 z',
         viewBox: '0 0 24 24',
         size: 24
     },
-    // Aggregate switch icon
     aggregate: {
         path: 'M2,6 v12 h20 v-12 z M4,8 h16 v8 h-16 z M6,10 v4 h2 v-4 z M10,10 v4 h2 v-4 z M14,10 v4 h2 v-4 z M18,10 v4 h2 v-4 z M10,2 h4 v3 h-4 z',
         viewBox: '0 0 24 24',
         size: 24
     },
-    // ToR switch icon
     tor: {
         path: 'M2,6 v12 h20 v-12 z M4,8 h16 v8 h-16 z M6,10 v4 h2 v-4 z M10,10 v4 h2 v-4 z M14,10 v4 h2 v-4 z M18,10 v4 h2 v-4 z M10,19 h4 v3 h-4 z',
         viewBox: '0 0 24 24',
@@ -47,9 +43,9 @@ const svgIcons = {
     }
 };
 
-// Initialize the application
+// Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
-    // Set up event listeners
+    // Event listeners
     document.getElementById('upload-btn').addEventListener('click', () => {
         document.getElementById('file-upload').click();
     });
@@ -60,22 +56,23 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('export-png-btn').addEventListener('click', () => exportTopology('png'));
     document.getElementById('export-jpeg-btn').addEventListener('click', () => exportTopology('jpeg'));
     document.getElementById('export-json-btn').addEventListener('click', exportTopologyAsJson);
-    // Update button text to make it clear it works for both nodes and links
+    
+    // Make button text clearer
     const removeBtn = document.getElementById('remove-node-btn');
     removeBtn.textContent = 'Remove Selected';
     removeBtn.title = 'Remove selected node or link';
     removeBtn.addEventListener('click', removeSelected);
 
-    // Set up add node and link buttons
+    // Add node and link buttons
     document.getElementById('add-node-btn').addEventListener('click', addNewNode);
     document.getElementById('add-link-btn').addEventListener('click', addNewLink);
 
-    // New: Add event listeners for network configuration controls
+    // Network configuration controls
     document.getElementById('assignment-strategy').addEventListener('change', updateNetworkConfig);
     document.getElementById('auto-arp').addEventListener('change', updateNetworkConfig);
     document.getElementById('queue-length').addEventListener('change', updateNetworkConfig);
 
-    // Create reset view button programmatically
+    // Reset view button
     const resetViewBtn = document.createElement('button');
     resetViewBtn.id = 'reset-view-btn';
     resetViewBtn.textContent = 'Reset View';
@@ -100,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
         snapToGrid = e.target.checked;
     });
 
-    // Create the SVG container for the graph
+    // SVG container for the graph
     initializeSvg();
 
     // Draw initial grid
@@ -110,117 +107,114 @@ document.addEventListener('DOMContentLoaded', () => {
     createDefaultTopology();
 
     document.getElementById('clear-all-btn').addEventListener('click', clearAllNodes);
+    document.getElementById('remove-links-btn').addEventListener('click', removeAllLinks);
+});
 
-    // Remove everything
-    function clearAllNodes() {
-        if (!currentTopology) {
-            alert('No topology loaded.');
-            return;
+// Clear everything
+function clearAllNodes() {
+    if (!currentTopology) {
+        alert('No topology loaded.');
+        return;
+    }
+
+    if (!confirm('Are you sure you want to remove all nodes? This cannot be undone.')) 
+        return;
+
+    // Create empty topology with current configuration settings
+    const assignment_strategy = currentTopology.assignment_strategy || 'l3';
+    const auto_arp_tables = currentTopology.auto_arp_tables !== undefined ? currentTopology.auto_arp_tables : true;
+    const default_queue_length = currentTopology.default_queue_length || 100;
+
+    // Create a new empty topology with the same configuration
+    const emptyTopology = {
+        "topology": {
+            "hosts": {},
+            "switches": {},
+            "links": [],
+            "assignment_strategy": assignment_strategy,
+            "auto_arp_tables": auto_arp_tables,
+            "default_queue_length": default_queue_length
         }
+    };
 
-        const confirmClear = confirm('Are you sure you want to remove all nodes? This cannot be undone.');
-        if (!confirmClear) return;
+    // Load the empty topology
+    loadTopology(emptyTopology);
 
-        // Create empty topology with current configuration settings
-        const assignment_strategy = currentTopology.assignment_strategy || 'l3';
-        const auto_arp_tables = currentTopology.auto_arp_tables !== undefined ? currentTopology.auto_arp_tables : true;
-        const default_queue_length = currentTopology.default_queue_length || 100;
+    // Reset the lastDropPos so new nodes start from the beginning
+    if (graph) {
+        graph.lastDropPos = { x: gridSize, y: gridSize };
+    }
 
-        // Create a new empty topology with the same configuration
-        const emptyTopology = {
-            "topology": {
-                "hosts": {},
-                "switches": {},
-                "links": [],
-                "assignment_strategy": assignment_strategy,
-                "auto_arp_tables": auto_arp_tables,
-                "default_queue_length": default_queue_length
-            }
-        };
-
-        // Load the empty topology
-        loadTopology(emptyTopology);
-
-        // Reset the lastDropPos so new nodes start from the beginning
-        if (graph) {
-            graph.lastDropPos = { x: gridSize, y: gridSize };
-        }
-
-        // Show confirmation message
-        document.getElementById('details-panel').innerHTML = `
+    // Show confirmation message
+    document.getElementById('details-panel').innerHTML = `
         <h3>Topology Cleared</h3>
         <p>All nodes and links have been removed.</p>
         <p>You can add new nodes using the Add Node panel.</p>
     `;
+}
+
+// Removes all links
+function removeAllLinks() {
+    if (!currentTopology) {
+        alert('No topology loaded.');
+        return;
     }
 
-    document.getElementById('remove-links-btn').addEventListener('click', removeAllLinks);
+    if (currentTopology.links.length === 0) {
+        alert('There are no links to remove.');
+        return;
+    }
 
-    // Removes all links
-    function removeAllLinks() {
-        if (!currentTopology) {
-            alert('No topology loaded.');
-            return;
+    if (!confirm('Are you sure you want to remove all links? This will maintain your node positions but delete all connections.'))
+        return;
+
+    // Store positions of all nodes
+    const nodePositions = {};
+    graph.nodes.forEach(node => {
+        nodePositions[node.id] = {
+            x: node.x,
+            y: node.y,
+            fx: node.fx,
+            fy: node.fy
+        };
+    });
+
+    // Clear all links but keep nodes
+    currentTopology.links = [];
+    graph.links = [];
+
+    // Reset ports for all nodes since links are gone
+    graph.nodes.forEach(node => {
+        node.ports = {};
+    });
+
+    // Restore positions for all nodes
+    graph.nodes.forEach(node => {
+        if (nodePositions[node.id]) {
+            node.x = nodePositions[node.id].x;
+            node.y = nodePositions[node.id].y;
+            node.fx = nodePositions[node.id].fx;
+            node.fy = nodePositions[node.id].fy;
         }
+    });
 
-        if (currentTopology.links.length === 0) {
-            alert('There are no links to remove.');
-            return;
-        }
+    // Update UI
+    updateTopologyInfo(currentTopology, graph);
+    visualizeGraph(graph);
 
-        const confirmRemove = confirm('Are you sure you want to remove all links? This will maintain your node positions but delete all connections.');
-        if (!confirmRemove) return;
+    // Clear any selection
+    selectedNode = null;
+    selectedLink = null;
 
-        // Store positions of all nodes
-        const nodePositions = {};
-        graph.nodes.forEach(node => {
-            nodePositions[node.id] = {
-                x: node.x,
-                y: node.y,
-                fx: node.fx,
-                fy: node.fy
-            };
-        });
-
-        // Clear all links but keep nodes
-        currentTopology.links = [];
-
-        // Rebuild the graph without links
-        graph.links = [];
-
-        // Reset ports for all nodes since links are gone
-        graph.nodes.forEach(node => {
-            node.ports = {};
-        });
-
-        // Restore positions for all nodes
-        graph.nodes.forEach(node => {
-            if (nodePositions[node.id]) {
-                node.x = nodePositions[node.id].x;
-                node.y = nodePositions[node.id].y;
-                node.fx = nodePositions[node.id].fx;
-                node.fy = nodePositions[node.id].fy;
-            }
-        });
-
-        // Update UI
-        updateTopologyInfo(currentTopology, graph);
-        visualizeGraph(graph);
-
-        // Clear any selection
-        selectedNode = null;
-        selectedLink = null;
-
-        // Update details panel
-        document.getElementById('details-panel').innerHTML = `
+    // Update details panel
+    document.getElementById('details-panel').innerHTML = `
         <h3>Links Removed</h3>
         <p>All links have been removed. Node positions have been preserved.</p>
         <p>You can add new links using the Add Link panel.</p>
     `;
-    }
-});
+}
 
-// New: Function to handle network configuration updates
+// Handle network configuration updates
 function updateNetworkConfig() {
     if (!currentTopology) return;
 
@@ -233,7 +227,7 @@ function updateNetworkConfig() {
     updateTopologyInfo(currentTopology, graph);
 }
 
-// New: Function to update configuration controls from topology data
+// Update configuration controls from topology data
 function updateConfigControls(topology) {
     // Set assignment strategy dropdown
     const assignmentStrategy = topology.assignment_strategy || 'l3';
@@ -280,12 +274,12 @@ function createLayoutSelector() {
     layoutSelect.addEventListener('change', (e) => {
         const selectedLayout = e.target.value;
 
-        // If Auto Detect is selected, determine the layout type
+        // Auto Detect logic
         if (selectedLayout === 'auto' && graph) {
             const detectedType = detectTopologyType(graph, currentTopology);
             currentLayout = detectedType;
 
-            // Update dropdown to show detected layout, without triggering another change event
+            // Update dropdown without triggering another change
             const layoutSelector = document.getElementById('layout-selector');
             layoutSelector.value = detectedType;
         } else {
@@ -303,7 +297,7 @@ function createLayoutSelector() {
     controls.appendChild(layoutContainer);
 }
 
-// Create a simple default topology when the page loads
+// Create a default topology 
 function createDefaultTopology() {
     const defaultTopology = {
         "topology": {
@@ -350,10 +344,7 @@ function handleFileUpload(event) {
     reader.onload = (e) => {
         try {
             const data = JSON.parse(e.target.result);
-
-            // Always reset to auto-detect for new files
-            currentLayout = 'auto';
-
+            currentLayout = 'auto'; // Reset to auto-detect for new files
             loadTopology(data);
         } catch (error) {
             alert('Error parsing JSON file: ' + error.message);
@@ -366,36 +357,23 @@ function handleFileUpload(event) {
 function toggleLabels() {
     showLabels = !showLabels;
 
-    // Update the labels visibility
-    svg.selectAll('.node-label')
-        .style('display', showLabels ? 'block' : 'none');
+    svg.selectAll('.node-label').style('display', showLabels ? 'block' : 'none');
+    svg.selectAll('.bandwidth-label').style('display', showLabels ? 'block' : 'none');
 
-    svg.selectAll('.bandwidth-label')
-        .style('display', showLabels ? 'block' : 'none');
-
-    // Update button text
-    document.getElementById('toggle-labels-btn').textContent =
+    document.getElementById('toggle-labels-btn').textContent = 
         showLabels ? 'Hide Labels' : 'Show Labels';
 }
 
-// Toggle visibility of the grid
+// Toggle grid visibility
 function toggleGrid() {
     showGrid = !showGrid;
-
-    // Update grid visibility
-    svg.selectAll('.grid-line')
-        .style('display', showGrid ? 'block' : 'none');
-
-    // Update button text
-    document.getElementById('toggle-grid-btn').textContent =
-        showGrid ? 'Hide Grid' : 'Show Grid';
+    svg.selectAll('.grid-line').style('display', showGrid ? 'block' : 'none');
+    document.getElementById('toggle-grid-btn').textContent = showGrid ? 'Hide Grid' : 'Show Grid';
 }
 
-// Draw the grid lines
+// Draw the grid 
 function drawGrid() {
-    const gridGroup = svg.append('g')
-        .attr('class', 'grid');
-
+    const gridGroup = svg.append('g').attr('class', 'grid');
     updateGrid();
 }
 
@@ -403,10 +381,9 @@ function drawGrid() {
 function updateGrid() {
     // Clear existing grid
     svg.select('.grid').selectAll('*').remove();
-
     const gridGroup = svg.select('.grid');
 
-    // Calculate number of lines based on container dimensions
+    // Calculate number of lines
     const numHorizontalLines = Math.floor(height / gridSize);
     const numVerticalLines = Math.floor(width / gridSize);
 
@@ -439,7 +416,7 @@ function loadTopology(data) {
     const nodePositions = {};
     if (graph && graph.nodes) {
         graph.nodes.forEach(node => {
-            // Only save positions if they've been set by the user
+            // Only save positions if they've been set
             if (node.fx !== null || node.fy !== null) {
                 nodePositions[node.id] = {
                     x: node.x,
@@ -458,10 +435,9 @@ function loadTopology(data) {
     // Extract topology section
     currentTopology = data.topology || data;
 
-    // New: Update configuration controls with values from the loaded topology
     updateConfigControls(currentTopology);
 
-    // Build graph structure
+    // Build graph 
     graph = buildGraph(currentTopology);
 
     // Restore saved positions for nodes still in the graph
@@ -476,21 +452,17 @@ function loadTopology(data) {
         });
     }
 
-    // Always auto-detect the topology type for newly loaded files
+    // Auto-detect the topology type
     const detectedType = detectTopologyType(graph, currentTopology);
     currentLayout = detectedType;
 
-    // Update the dropdown to show the detected type
+    // Update the dropdown
     const layoutSelector = document.getElementById('layout-selector');
     layoutSelector.value = detectedType;
 
-    // Update UI with topology information
+    // Update UI
     updateTopologyInfo(currentTopology, graph);
-
-    // Update node dropdowns for links
     updateNodeDropdowns();
-
-    // Visualize the graph
     visualizeGraph(graph);
 }
 
@@ -505,7 +477,7 @@ function updateNodeDropdowns() {
     sourceSelect.innerHTML = '<option value="">Select a node</option>';
     targetSelect.innerHTML = '<option value="">Select a node</option>';
 
-    // Sort nodes by ID for easier selection
+    // Sort nodes by ID 
     const sortedNodes = [...graph.nodes].sort((a, b) => a.id.localeCompare(b.id));
 
     // Add options for each node
@@ -544,7 +516,7 @@ function addNewNode() {
         return;
     }
 
-    // Validate node ID format based on type
+    // Check naming convention
     const validateNodeId = () => {
         const prefix = nodeId.charAt(0);
         const validPrefixes = {
@@ -556,19 +528,16 @@ function addNewNode() {
         };
 
         if (prefix !== validPrefixes[nodeType]) {
-            const isConfirmed = confirm(
+            return confirm(
                 `Node ID "${nodeId}" doesn't follow the naming convention for ${nodeType} (should start with "${validPrefixes[nodeType]}"). Continue anyway?`
             );
-            return isConfirmed;
         }
         return true;
     };
 
-    if (!validateNodeId()) {
-        return;
-    }
+    if (!validateNodeId()) return;
 
-    // Determine where to add node (hosts or switches)
+    // Determine where to add node
     const addToHosts = nodeType === 'host';
 
     // Add to topology data
@@ -592,67 +561,59 @@ function addNewNode() {
         ports: {}
     };
 
-    //-------------------------------------------------------------------
-    //  TOP-LEFT-QUADRANT PLACEMENT – look only at the last node we added
-    //-------------------------------------------------------------------
-    const margin = gridSize;          // one grid square of padding
-    const spacing = gridSize * 4;      // how far to nudge each time
+    // TOP-LEFT-QUADRANT PLACEMENT
+    const margin = gridSize;      
+    const spacing = gridSize * 4;  
 
-    // the "quadrant" boundaries
+    // quadrant boundaries
     const maxX = width / 2 - margin;
     const maxY = height / 2 - margin;
 
-    // keep track of the previous drop point on the graph object itself
+    // track last drop point
     if (!graph.lastDropPos) {
-        // first ever click – start in the corner
         graph.lastDropPos = { x: margin, y: margin };
     } else {
         // nudge right
         graph.lastDropPos.x += spacing;
 
-        // if that would leave the quadrant, move to a new line
+        // if that would leave the quadrant, move to new line
         if (graph.lastDropPos.x > maxX) {
-            graph.lastDropPos.x = margin;              // back to the left edge
-            graph.lastDropPos.y += spacing;            // one row down
-            // make sure we never leave the quadrant vertically, either
+            graph.lastDropPos.x = margin;           
+            graph.lastDropPos.y += spacing;         
             if (graph.lastDropPos.y > maxY) {
-                graph.lastDropPos.y = maxY;            // clamp to the last visible row
+                graph.lastDropPos.y = maxY;           
             }
         }
     }
 
-    // finally assign the coords to the new node
+    // assign coords to new node
     newNode.x = graph.lastDropPos.x;
     newNode.y = graph.lastDropPos.y;
-    newNode.fx = newNode.x;   // keep it fixed until the user drags it
+    newNode.fx = newNode.x;   // fixed position until dragged
     newNode.fy = newNode.y;
 
-    newNode._userAdded = true;   // optional flag if you need it elsewhere
+    newNode._userAdded = true;   
 
-    // Add the node to the graph
+    // Add node to graph
     graph.nodes.push(newNode);
 
-    // Update UI and redraw
+    // Update UI
     updateTopologyInfo(currentTopology, graph);
     updateNodeDropdowns();
 
-    // Instead of visualizeGraph, just add the new node to the visualization
-    // This prevents re-layout of existing nodes
+    // Add just the new node to visualization
     addNodeToVisualization(newNode);
 
     // Clear input field
     document.getElementById('node-id').value = '';
 }
 
-// New function to add a single node to the visualization
+// Add a single node to visualization
 function addNodeToVisualization(newNode) {
-    // Instead of adding just one node, redraw the visualization but preserve positions
-    // This ensures that the simulation and drag behavior work correctly with all nodes
-
-    // Clear previous graph, but keep the grid
+    // Redraw the visualization but preserve positions
     svg.select('g').selectAll('*').remove();
 
-    // Create links first (so they appear under nodes)
+    // Create links first (under nodes)
     const link = svg.select('g').selectAll('.link')
         .data(graph.links)
         .enter()
@@ -662,34 +623,33 @@ function addNodeToVisualization(newNode) {
         .attr('stroke', '#999')
         .attr('stroke-opacity', 0.6);
 
-    // Add click event to links with improved visual feedback
+    // Add click event to links
     link.on('click', (event, d) => {
         // Clear previous selection
         svg.selectAll('.selected').classed('selected', false);
 
-        // Mark this link as selected with enhanced visual feedback
+        // Mark this link as selected
         const selectedLinkElement = d3.select(event.currentTarget);
         selectedLinkElement.classed('selected', true);
         selectedLinkElement
             .attr('stroke-width', d => (d.properties.bw ? Math.sqrt(d.properties.bw) * 0.5 : 1) + 2)
-            .attr('stroke', '#ff6600')  // Bright orange for selected link
+            .attr('stroke', '#ff6600')  
             .attr('stroke-opacity', 1.0);
 
         // Update selection tracking
         selectedNode = null;
         selectedLink = d;
 
-        // Show link details with additional hint about removal
+        // Show link details
         showLinkDetails(d);
 
-        // Show a message in the details panel about link removal
+        // Add hint about removal
         const detailsPanel = document.getElementById('details-panel');
         const tipElement = document.createElement('div');
         tipElement.className = 'selection-tip';
         tipElement.innerHTML = '<p style="color: #ff6600; font-weight: bold;">Click "Remove Selected" to delete this link.</p>';
         detailsPanel.appendChild(tipElement);
 
-        // Stop propagation to prevent other click events
         event.stopPropagation();
     });
 
@@ -715,20 +675,20 @@ function addNodeToVisualization(newNode) {
 
         const icon = svgIcons[iconType];
 
-        // Background circle for easier selection and consistent coloring
+        // Background circle
         node.append('circle')
             .attr('class', 'node')
             .attr('r', 14)
             .attr('fill', getNodeColor(d.type));
 
-        // The actual icon path
+        // Icon path
         node.append('path')
             .attr('d', icon.path)
             .attr('class', 'node-icon')
-            .attr('fill', '#ffffff')  // White icon
-            .attr('stroke', '#000000')  // Black outline
+            .attr('fill', '#ffffff')  
+            .attr('stroke', '#000000')  
             .attr('stroke-width', 0.5)
-            .attr('transform', `translate(-12, -12)`);  // Center the icon
+            .attr('transform', `translate(-12, -12)`); 
     });
 
     // Add node labels
@@ -744,7 +704,7 @@ function addNodeToVisualization(newNode) {
         .text(d => d.id)
         .style('display', showLabels ? 'block' : 'none');
 
-    // Add bandwidth labels to links
+    // Bandwidth labels for links
     const linkLabels = svg.select('g').selectAll('.bandwidth-label')
         .data(graph.links.filter(d => d.properties.bw))
         .enter()
@@ -755,7 +715,7 @@ function addNodeToVisualization(newNode) {
         .attr('x', d => (d.source.x + d.target.x) / 2)
         .attr('y', d => (d.source.y + d.target.y) / 2);
 
-    // Add click event to nodes
+    // Click event for nodes
     nodeGroup.on('click', (event, d) => {
         // Clear previous selection
         svg.selectAll('.selected').classed('selected', false);
@@ -770,11 +730,10 @@ function addNodeToVisualization(newNode) {
         // Show node details
         showNodeDetails(d);
 
-        // Stop propagation to prevent other click events
         event.stopPropagation();
     });
 
-    // Set up simulation with the updated nodes and links
+    // Set up simulation
     if (simulation) {
         simulation.stop();
     }
@@ -791,7 +750,7 @@ function addNodeToVisualization(newNode) {
 
     simulation.alphaDecay(0.1); // Faster settling
 
-    // Update simulation on each tick
+    // Update simulation on tick
     simulation.on('tick', () => {
         // For fat tree layout, ensure Y positions stay fixed
         if (currentLayout === 'fattree') {
@@ -803,10 +762,10 @@ function addNodeToVisualization(newNode) {
             });
         }
 
-        // Snap nodes to grid if enabled
+        // Snap to grid if enabled
         if (snapToGrid) {
             graph.nodes.forEach(d => {
-                // Only snap nodes that are not being dragged
+                // Only snap nodes that aren't being dragged
                 if (!d.isDragging) {
                     d.x = Math.round(d.x / gridSize) * gridSize;
                     if (currentLayout !== 'fattree') {
@@ -816,7 +775,7 @@ function addNodeToVisualization(newNode) {
             });
         }
 
-        // Update link positions, maintaining selection status
+        // Update link positions
         link.each(function (d) {
             const linkElement = d3.select(this);
             linkElement
@@ -846,10 +805,10 @@ function addNodeToVisualization(newNode) {
             .attr('y', d => (d.source.y + d.target.y) / 2);
     });
 
-    // Add click handler to SVG background to clear selection
+    // Click handler for background
     svg.on('click', (event) => {
         if (event.target === svg.node() || event.target.classList.contains('grid-line')) {
-            // Reset all link styles to default when deselecting
+            // Reset link styles
             svg.selectAll('.link').each(function () {
                 const link = d3.select(this);
                 const d = link.datum();
@@ -860,7 +819,7 @@ function addNodeToVisualization(newNode) {
                     .attr('stroke-width', d.properties.bw ? Math.sqrt(d.properties.bw) * 0.5 : 1);
             });
 
-            // Clear other selections
+            // Clear selections
             svg.selectAll('.selected').classed('selected', false);
             selectedNode = null;
             selectedLink = null;
@@ -874,20 +833,20 @@ function addNodeToVisualization(newNode) {
         }
     });
 
-    // Start the simulation with low alpha to just update positions
+    // Start simulation with low alpha
     simulation.alpha(0.3).restart();
 }
 
-// Helper function to get the next available port number for a node
+// Get next available port number 
 function getNextPortNumber(nodeId) {
     const node = graph.nodes.find(n => n.id === nodeId);
     if (!node) return 1;
 
-    // Get all used port numbers for this node
+    // Get used port numbers
     const usedPorts = Object.values(node.ports);
     if (usedPorts.length === 0) return 1;
 
-    // Return the next available port number
+    // Next available port number
     return Math.max(...usedPorts) + 1;
 }
 
@@ -935,16 +894,15 @@ function addNewLink() {
     // Add to topology data
     currentTopology.links.push(newLink);
 
-    // Find the actual node objects in the graph
+    // Find node objects
     const sourceNode = graph.nodes.find(n => n.id === sourceId);
     const targetNode = graph.nodes.find(n => n.id === targetId);
 
     // Assign port numbers
-    // Simplified version for addNewLink - we'll use the actual implementation based on your existing code
     const sourcePort = getNextPortNumber(sourceId);
     const targetPort = getNextPortNumber(targetId);
 
-    // Store port assignments in the nodes
+    // Store port assignments
     if (sourceNode) {
         sourceNode.ports[targetId] = sourcePort;
     }
@@ -952,7 +910,7 @@ function addNewLink() {
         targetNode.ports[sourceId] = targetPort;
     }
 
-    // Create the link object for the graph
+    // Create link object
     const linkObj = {
         source: sourceNode,
         target: targetNode,
@@ -961,13 +919,11 @@ function addNewLink() {
         targetPort: targetPort
     };
 
-    // Add the link to the graph
+    // Add link to graph
     graph.links.push(linkObj);
 
     // Update UI 
     updateTopologyInfo(currentTopology, graph);
-
-    // Add the new link to the visualization instead of redrawing everything
     addLinkToVisualization(linkObj);
 
     // Reset form
@@ -976,13 +932,9 @@ function addNewLink() {
     document.getElementById('link-bandwidth').value = '';
 }
 
-// New function to add a single link to the visualization
+// Add a link to visualization
 function addLinkToVisualization(newLink) {
-    // Similar to addNodeToVisualization, we'll redraw everything to ensure
-    // the simulation and elements all work correctly together
-
-    // Call the same visualization approach we use for adding nodes
-    // This ensures consistency and proper drag behavior
+    // Just use the same function we use for nodes to redraw everything
     addNodeToVisualization(null);
 }
 
@@ -997,7 +949,7 @@ function removeSelected() {
     if (selectedNode) {
         const nodeId = selectedNode.id;
 
-        // Check if node has links connected to it
+        // Check if node has links
         const hasLinks = graph.links.some(link => {
             const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
             const targetId = typeof link.target === 'object' ? link.target.id : link.target;
@@ -1005,11 +957,11 @@ function removeSelected() {
         });
 
         if (hasLinks) {
-            const confirmRemove = confirm(`Node "${nodeId}" has links connected to it. Removing it will also remove these links. Continue?`);
-            if (!confirmRemove) return;
+            if (!confirm(`Node "${nodeId}" has links connected to it. Removing it will also remove these links. Continue?`))
+                return;
         }
 
-        // Store positions of all nodes
+        // Save positions
         const nodePositions = {};
         graph.nodes.forEach(node => {
             nodePositions[node.id] = {
@@ -1027,7 +979,7 @@ function removeSelected() {
             delete currentTopology.switches[nodeId];
         }
 
-        // Remove connected links from topology
+        // Remove connected links
         currentTopology.links = currentTopology.links.filter(link =>
             link[0] !== nodeId && link[1] !== nodeId
         );
@@ -1042,7 +994,7 @@ function removeSelected() {
             return sourceId !== nodeId && targetId !== nodeId;
         });
 
-        // Restore positions for remaining nodes
+        // Restore positions
         graph.nodes.forEach(node => {
             if (nodePositions[node.id]) {
                 node.x = nodePositions[node.id].x;
@@ -1072,7 +1024,7 @@ function removeSelected() {
         const targetId = typeof selectedLink.target === 'object' ?
             selectedLink.target.id : selectedLink.target;
 
-        // Store positions of all nodes
+        // Save positions
         const nodePositions = {};
         graph.nodes.forEach(node => {
             nodePositions[node.id] = {
@@ -1099,7 +1051,7 @@ function removeSelected() {
             );
         });
 
-        // Restore positions for all nodes
+        // Restore positions
         graph.nodes.forEach(node => {
             if (nodePositions[node.id]) {
                 node.x = nodePositions[node.id].x;
@@ -1125,7 +1077,7 @@ function removeSelected() {
     }
 }
 
-// Export topology as JSON file
+// Export topology as JSON
 function exportTopologyAsJson() {
     if (!currentTopology) {
         alert('No topology loaded.');
@@ -1153,7 +1105,7 @@ function exportTopologyAsJson() {
     URL.revokeObjectURL(url);
 }
 
-// Detect the type of topology based on graph structure and naming
+// Detect the type of topology 
 function detectTopologyType(graph, topology) {
     // Count node types
     const nodeTypeCount = {};
@@ -1161,20 +1113,19 @@ function detectTopologyType(graph, topology) {
         nodeTypeCount[node.type] = (nodeTypeCount[node.type] || 0) + 1;
     });
 
-    // Check for specific node naming patterns by prefix
+    // Check prefix patterns
     const prefixCounts = {};
     graph.nodes.forEach(node => {
         const prefix = node.id.charAt(0);
         prefixCounts[prefix] = (prefixCounts[prefix] || 0) + 1;
     });
 
-    // Binary tree detection should take priority - check for 'b' prefixed nodes
-    // which are only used in binary tree topologies
+    // Binary tree first - check for 'b' prefixed nodes
     if (prefixCounts['b']) {
         return 'binary';
     }
 
-    // Check for fat tree structure (core, aggregate, edge layers)
+    // Fat tree structure check
     const hasFatTreeNaming =
         (prefixCounts['c'] && prefixCounts['a'] && prefixCounts['t']) ||
         (nodeTypeCount['core'] && nodeTypeCount['aggregate'] && nodeTypeCount['tor']);
@@ -1183,19 +1134,19 @@ function detectTopologyType(graph, topology) {
         return 'fattree';
     }
 
-    // Check for simple linear topology
+    // Simple linear topology check
     const hasSimpleNaming = prefixCounts['s'] && prefixCounts['s'] < 10;
     if (hasSimpleNaming) {
         return 'linear';
     }
 
-    // Default to force-directed for unknown topologies
+    // Default to force-directed
     return 'force';
 }
 
 // Build graph structure from topology data
 function buildGraph(topology) {
-    // Store positions of existing nodes
+    // Save existing positions
     const nodePositions = {};
     if (graph && graph.nodes) {
         graph.nodes.forEach(node => {
@@ -1251,12 +1202,12 @@ function buildGraph(topology) {
         nodes.push(node);
     }
 
-    // Track port assignments for each node
+    // Track port assignments
     const nodePortCounters = {};
 
     // Initialize port counters
     nodes.forEach(node => {
-        nodePortCounters[node.id] = 1; // Start port numbering from 1
+        nodePortCounters[node.id] = 1; // Start from 1
     });
 
     // Add links and assign port numbers
@@ -1274,7 +1225,7 @@ function buildGraph(topology) {
         const sourcePort = nodePortCounters[sourceId]++;
         const targetPort = nodePortCounters[targetId]++;
 
-        // Store port assignments in the nodes
+        // Store port assignments in nodes
         const sourceNode = nodes.find(n => n.id === sourceId);
         const targetNode = nodes.find(n => n.id === targetId);
 
@@ -1294,7 +1245,7 @@ function buildGraph(topology) {
         });
     });
 
-    // Preserve lastDropPos if it existed
+    // Keep lastDropPos if it existed
     if (graph && graph.lastDropPos) {
         const newGraph = { nodes, links };
         newGraph.lastDropPos = graph.lastDropPos;
@@ -1304,30 +1255,30 @@ function buildGraph(topology) {
     return { nodes, links };
 }
 
-// Determine node type based on its id and topology context
+// Get node type based on ID and topology
 function getNodeType(nodeId, topology) {
     const prefix = nodeId.charAt(0);
 
-    // Standard naming conventions for fat trees
+    // Standard conventions
     if (prefix === 'h') return 'host';
 
-    // For fat tree naming
+    // Fat tree naming
     if (prefix === 't') return 'tor';
     if (prefix === 'a' && topology && isInFatTreeTopology(topology)) return 'aggregate';
     if (prefix === 'c' && topology && isInFatTreeTopology(topology)) return 'core';
 
-    // For binary tree naming (a, b, c, d)
+    // Binary tree naming
     if (topology && isInBinaryTreeTopology(topology)) {
         if (prefix === 'a') {
-            // In binary tree, 'a' is typically the root (core)
+            // Root in binary tree
             return 'core';
         }
         if (prefix === 'b' || prefix === 'c') {
-            // 'b' and 'c' are middle levels (aggregate)
+            // Middle levels
             return 'aggregate';
         }
         if (prefix === 'd') {
-            // 'd' nodes that connect to hosts are ToR switches
+            // Bottom level
             if (isConnectedToHosts(nodeId, topology)) {
                 return 'tor';
             }
@@ -1335,26 +1286,25 @@ function getNodeType(nodeId, topology) {
         }
     }
 
-    // Handle generic switches with 's' prefix
+    // Generic switches with 's' prefix
     if (prefix === 's') {
-        // Always treat 's' prefixed nodes as generic switches
         return 'switch';
     }
 
-    // Default to aggregate for any switch-like nodes in fat tree topologies
+    // Default for fat tree
     if (isInFatTreeTopology(topology)) {
         return 'aggregate';
     }
 
-    // Default case for any other node
+    // Default fallback
     return 'switch';
 }
 
-// Helper function to detect if this is a fat tree topology
+// Check if this is a fat tree topology
 function isInFatTreeTopology(topology) {
     if (!topology || !topology.links) return false;
 
-    // Check for fat tree naming patterns (t, a, c nodes)
+    // Check for naming patterns (t, a, c nodes)
     const hasToRNodes = topology.links.some(link =>
         link[0].charAt(0) === 't' || link[1].charAt(0) === 't'
     );
@@ -1367,32 +1317,32 @@ function isInFatTreeTopology(topology) {
         link[0].charAt(0) === 'c' || link[1].charAt(0) === 'c'
     );
 
-    // Fat tree must have dedicated ToR nodes
+    // Fat tree must have ToR nodes
     return hasToRNodes && (hasAggregateNodes || hasCoreNodes);
 }
 
-// Helper function to detect if this is a binary tree topology
+// Check if this is a binary tree topology
 function isInBinaryTreeTopology(topology) {
     if (!topology || !topology.links) return false;
 
-    // Check for binary tree naming patterns (a, b, c, d nodes)
+    // Check for naming patterns (a, b, c, d)
     const prefixes = new Set();
     topology.links.forEach(link => {
         prefixes.add(link[0].charAt(0));
         prefixes.add(link[1].charAt(0));
     });
 
-    // Binary tree should have nodes from multiple levels (a, b, c, d)
+    // Binary tree pattern
     const hasBinaryPattern = prefixes.has('a') && prefixes.has('b') &&
         (prefixes.has('c') || prefixes.has('d'));
 
-    // Should NOT have dedicated 't' nodes (which are fat tree specific)
+    // Not fat tree
     const hasToRNodes = prefixes.has('t');
 
     return hasBinaryPattern && !hasToRNodes;
 }
 
-// Helper function to check if a node is connected to hosts
+// Check if node connected to hosts
 function isConnectedToHosts(nodeId, topology) {
     if (!topology || !topology.links) return false;
 
@@ -1407,7 +1357,7 @@ function isConnectedToHosts(nodeId, topology) {
     });
 }
 
-// Initialize SVG container
+// Initialize SVG
 function initializeSvg() {
     const container = document.getElementById('graph-container');
     width = container.clientWidth;
@@ -1415,7 +1365,7 @@ function initializeSvg() {
 
     // Create zoom behavior
     const zoom = d3.zoom()
-        .scaleExtent([0.1, 10]) // Allow zooming from 0.1x to 10x
+        .scaleExtent([0.1, 10])
         .on('zoom', (event) => {
             svg.select('g').attr('transform', event.transform);
         });
@@ -1427,16 +1377,16 @@ function initializeSvg() {
         .attr('viewBox', [0, 0, width, height])
         .call(zoom);
 
-    // Store zoom behavior for later use in resetView
+    // Store zoom behavior
     svg.zoom = zoom;
 
-    // Add a group element for the graph
+    // Add a group element
     const g = svg.append('g');
 }
 
 // Visualize the graph
 function visualizeGraph(graph) {
-    // Clear previous graph, but keep the grid
+    // Clear previous graph but keep grid
     svg.select('g').selectAll('*').remove();
 
     // Reset selection tracking
@@ -1446,7 +1396,7 @@ function visualizeGraph(graph) {
     // Only apply layout to nodes without positions
     const newNodes = graph.nodes.filter(node => node.x === undefined || node.y === undefined);
 
-    // Store existing node positions before applying any layout
+    // Store existing positions
     const positionedNodes = graph.nodes.filter(node => node.x !== undefined && node.y !== undefined);
     const existingPositions = {};
 
@@ -1459,7 +1409,7 @@ function visualizeGraph(graph) {
         };
     });
 
-    // Apply layout based on selected type only for new nodes
+    // Apply layout based on type for new nodes
     if (newNodes.length > 0) {
         switch (currentLayout) {
             case 'fattree':
@@ -1478,7 +1428,7 @@ function visualizeGraph(graph) {
         }
     }
 
-    // Restore existing node positions after layout
+    // Restore existing positions
     graph.nodes.forEach(node => {
         if (existingPositions[node.id]) {
             node.x = existingPositions[node.id].x;
@@ -1486,33 +1436,31 @@ function visualizeGraph(graph) {
             node.fx = existingPositions[node.id].fx;
             node.fy = existingPositions[node.id].fy;
         }
-        // For nodes without positions, snap to grid if needed
+        // For nodes without positions, snap to grid
         else if (snapToGrid && node.layoutX && node.layoutY) {
             node.x = Math.round(node.layoutX / gridSize) * gridSize;
             node.y = Math.round(node.layoutY / gridSize) * gridSize;
-            // For fat tree layout, prevent vertical movement by fixing Y position
+            // For fat tree layout, fix Y position
             if (currentLayout === 'fattree') {
-                node.fy = node.y;  // Fix Y position
+                node.fy = node.y; 
             }
         } else if (node.layoutX && node.layoutY) {
             node.x = node.layoutX;
             node.y = node.layoutY;
-            // For fat tree layout, prevent vertical movement
+            // For fat tree layout, fix Y
             if (currentLayout === 'fattree') {
-                node.fy = node.y;  // Fix Y position
+                node.fy = node.y;
             }
         }
     });
 
-    // Auto-zoom to fit the topology if there are new nodes
+    // Auto-zoom for new nodes
     if (newNodes.length > 0) {
         autoZoomToFit(graph);
     }
 
-    // Set up force simulation with constraints for fat tree
-    if (simulation) {
-        simulation.stop();
-    }
+    // Set up force simulation
+    if (simulation) simulation.stop();
 
     simulation = d3.forceSimulation(graph.nodes)
         .force('link', d3.forceLink(graph.links).id(d => d.id).distance(100))
@@ -1526,32 +1474,32 @@ function visualizeGraph(graph) {
 
     simulation.alphaDecay(0.1); // Faster settling
 
-    // Create links first (so they appear under nodes)
+    // Create links
     const link = svg.select('g').selectAll('.link')
         .data(graph.links)
         .enter()
         .append('line')
         .attr('class', 'link')
         .attr('stroke-width', d => d.properties.bw ? Math.sqrt(d.properties.bw) * 0.5 : 1)
-        .attr('stroke', '#999')  // Ensure links have a visible stroke color
+        .attr('stroke', '#999')  
         .attr('stroke-opacity', 0.6);
 
-    // Add click event to links
+    // Link click event
     link.on('click', (event, d) => {
-        // Clear previous selection
+        // Clear selection
         svg.selectAll('.selected').classed('selected', false);
-
-        // Mark this link as selected
+        
+        // Mark link as selected
         d3.select(event.currentTarget).classed('selected', true);
-
-        // Update selection tracking
+        
+        // Update tracking
         selectedNode = null;
         selectedLink = d;
-
-        // Show link details
+        
+        // Show details
         showLinkDetails(d);
-
-        // Stop propagation to prevent other click events
+        
+        // Stop propagation
         event.stopPropagation();
     });
 
@@ -1576,20 +1524,20 @@ function visualizeGraph(graph) {
 
         const icon = svgIcons[iconType];
 
-        // Background circle for easier selection and consistent coloring
+        // Background circle
         node.append('circle')
             .attr('class', 'node')
             .attr('r', 14)
             .attr('fill', getNodeColor(d.type));
 
-        // The actual icon path
+        // Icon path
         node.append('path')
             .attr('d', icon.path)
             .attr('class', 'node-icon')
-            .attr('fill', '#ffffff')  // White icon
-            .attr('stroke', '#000000')  // Black outline
+            .attr('fill', '#ffffff')  
+            .attr('stroke', '#000000')  
             .attr('stroke-width', 0.5)
-            .attr('transform', `translate(-12, -12)`);  // Center the icon
+            .attr('transform', `translate(-12, -12)`);
     });
 
     // Add node labels
@@ -1603,7 +1551,7 @@ function visualizeGraph(graph) {
         .text(d => d.id)
         .style('display', showLabels ? 'block' : 'none');
 
-    // Add bandwidth labels to links
+    // Add bandwidth labels
     const linkLabels = svg.select('g').selectAll('.bandwidth-label')
         .data(graph.links.filter(d => d.properties.bw))
         .enter()
@@ -1612,34 +1560,34 @@ function visualizeGraph(graph) {
         .text(d => `${d.properties.bw} Mbps`)
         .style('display', showLabels ? 'block' : 'none');
 
-    // Add click event to nodes
+    // Node click event
     nodeGroup.on('click', (event, d) => {
-        // Clear previous selection
+        // Clear selection
         svg.selectAll('.selected').classed('selected', false);
-
-        // Mark this node as selected
+        
+        // Mark node as selected
         d3.select(event.currentTarget).select('.node').classed('selected', true);
-
-        // Update selection tracking
+        
+        // Update tracking
         selectedNode = d;
         selectedLink = null;
-
-        // Show node details
+        
+        // Show details
         showNodeDetails(d);
-
-        // Stop propagation to prevent other click events
+        
+        // Stop propagation
         event.stopPropagation();
     });
 
-    // Add click handler to SVG background to clear selection
+    // Background click handler
     svg.on('click', (event) => {
         if (event.target === svg.node() || event.target.classList.contains('grid-line')) {
             // Clear selection
             svg.selectAll('.selected').classed('selected', false);
             selectedNode = null;
             selectedLink = null;
-
-            // Update details panel
+            
+            // Update details
             document.getElementById('details-panel').innerHTML = `
                 <h3>Node Details</h3>
                 <p>Click on a node to see details.</p>
@@ -1647,22 +1595,20 @@ function visualizeGraph(graph) {
         }
     });
 
-    // Update simulation on each tick
+    // Update simulation on tick
     simulation.on('tick', () => {
-        // For fat tree layout, ensure Y positions stay fixed
+        // Fat tree Y-pos fix
         if (currentLayout === 'fattree') {
             graph.nodes.forEach(d => {
-                // Keep Y position fixed for fat tree layout
                 if (d.fy !== undefined) {
                     d.y = d.fy;
                 }
             });
         }
 
-        // Snap nodes to grid if enabled
+        // Snap to grid if enabled
         if (snapToGrid) {
             graph.nodes.forEach(d => {
-                // Only snap nodes that are not being dragged
                 if (!d.isDragging) {
                     d.x = Math.round(d.x / gridSize) * gridSize;
                     if (currentLayout !== 'fattree') {
@@ -1672,6 +1618,7 @@ function visualizeGraph(graph) {
             });
         }
 
+        // Update positions
         link
             .attr('x1', d => d.source.x)
             .attr('y1', d => d.source.y)
@@ -1691,27 +1638,27 @@ function visualizeGraph(graph) {
     });
 }
 
-// Helper function to get node color based on type
+// Get node color based on type
 function getNodeColor(type) {
     switch (type) {
         case 'host': return '#2ca02c';      // Green
         case 'tor': return '#1f77b4';       // Blue
         case 'aggregate': return '#ff7f0e'; // Orange
         case 'core': return '#d62728';      // Red
-        default: return '#7f7f7f';          // Gray for unknown
+        default: return '#7f7f7f';          // Gray
     }
 }
 
-// Apply Fat Tree layout with true symmetrical placement
+// Apply Fat Tree layout 
 function applyFatTreeLayout(graph) {
-    // Calculate dynamic spacing based on topology size
+    // Calculate spacing based on topology size
     const totalNodes = graph.nodes.length;
     const hostCount = graph.nodes.filter(n => n.type === 'host').length;
 
-    // Adaptive layer heights and spacing based on topology size
+    // Adaptive spacing based on size
     let layerSpacing;
     if (totalNodes > 200) {
-        // Large topology - more aggressive spacing
+        // Large topology
         layerSpacing = 0.22;
     } else if (totalNodes > 100) {
         // Medium topology
@@ -1721,19 +1668,19 @@ function applyFatTreeLayout(graph) {
         layerSpacing = 0.28;
     }
 
-    // Pre-calculate and snap layer heights to grid to ensure consistency
+    // Pre-calculate layer heights
     const coreLayerY = Math.round((height * 0.1) / gridSize) * gridSize;
     const aggregateLayerY = Math.round((height * (0.1 + layerSpacing)) / gridSize) * gridSize;
     const torLayerY = Math.round((height * (0.1 + layerSpacing * 2)) / gridSize) * gridSize;
     const hostLayerY = Math.round((height * (0.1 + layerSpacing * 3)) / gridSize) * gridSize;
 
-    // Get nodes by type and sort them
+    // Get nodes by type and sort
     const coreNodes = graph.nodes.filter(n => n.type === 'core');
     const aggregateNodes = graph.nodes.filter(n => n.type === 'aggregate');
     const torNodes = graph.nodes.filter(n => n.type === 'tor');
     const hostNodes = graph.nodes.filter(n => n.type === 'host');
 
-    // Sort all nodes by ID numerically
+    // Sort by numeric ID
     const sortByNumId = (a, b) => {
         const aNum = parseInt(a.id.match(/\d+/)[0] || 0);
         const bNum = parseInt(b.id.match(/\d+/)[0] || 0);
@@ -1745,23 +1692,23 @@ function applyFatTreeLayout(graph) {
     const sortedTorNodes = [...torNodes].sort(sortByNumId);
     const sortedHostNodes = [...hostNodes].sort(sortByNumId);
 
-    // Position all layers with appropriate spacing for the topology size
+    // Position all layers
     positionLayerSymmetrically(sortedCoreNodes, coreLayerY, totalNodes);
     positionLayerSymmetrically(sortedAggregateNodes, aggregateLayerY, totalNodes);
     positionLayerSymmetrically(sortedTorNodes, torLayerY, totalNodes);
 
-    // Position hosts symmetrically under their ToR switches
+    // Position hosts under ToRs
     positionHostsUnderToRs(sortedHostNodes, sortedTorNodes, hostLayerY, totalNodes);
 }
 
-// Position a layer of nodes with perfect symmetry
+// Position a layer symmetrically
 function positionLayerSymmetrically(nodes, yPosition, totalNodes = 0) {
     if (nodes.length === 0) return;
 
-    // Dynamic margin based on topology size
+    // Dynamic margin based on size
     let margin;
     if (totalNodes > 200) {
-        margin = 20; // Smaller margins for large topologies to maximize space
+        margin = 20; // Smaller for large topologies
     } else if (totalNodes > 100) {
         margin = 30;
     } else {
@@ -1773,50 +1720,50 @@ function positionLayerSymmetrically(nodes, yPosition, totalNodes = 0) {
     if (nodes.length === 1) {
         // Single node - center it
         nodes[0].layoutX = width / 2;
-        nodes[0].layoutY = yPosition; // All nodes in layer get the EXACT same Y
+        nodes[0].layoutY = yPosition;
     } else {
-        // Multiple nodes - calculate minimum spacing based on topology size
+        // Multiple nodes 
         let minSpacing;
         if (totalNodes > 200) {
-            minSpacing = 35; // Tighter spacing for very large topologies
+            minSpacing = 35; // Tighter for large topologies
         } else if (totalNodes > 100) {
             minSpacing = 45;
         } else {
             minSpacing = 60;
         }
 
-        // Calculate required width for all nodes with minimum spacing
+        // Check if nodes fit with min spacing
         const requiredWidth = (nodes.length - 1) * minSpacing;
 
         if (requiredWidth <= availableWidth) {
-            // Nodes fit with minimum spacing - distribute evenly
+            // Distribute evenly
             const actualSpacing = availableWidth / (nodes.length - 1);
 
             nodes.forEach((node, index) => {
                 node.layoutX = margin + (index * actualSpacing);
-                node.layoutY = yPosition; // All nodes in layer get the EXACT same Y
+                node.layoutY = yPosition;
             });
         } else {
-            // Nodes don't fit with minimum spacing - use tight spacing
+            // Use tight spacing
             const tightSpacing = availableWidth / (nodes.length - 1);
 
             nodes.forEach((node, index) => {
                 node.layoutX = margin + (index * tightSpacing);
-                node.layoutY = yPosition; // All nodes in layer get the EXACT same Y
+                node.layoutY = yPosition; 
             });
         }
     }
 }
 
-// Position hosts symmetrically under their ToR switches
+// Position hosts under ToR switches
 function positionHostsUnderToRs(hosts, tors, yPosition, totalNodes = 0) {
-    // Create mapping of ToR to hosts
+    // Map ToR to hosts
     const torToHostsMap = new Map();
-
-    // Build the host to ToR mapping first
+    
+    // Host to ToR mapping
     const hostToTorMap = buildHostToTorMap(graph);
 
-    // Group hosts by their ToR
+    // Group hosts by ToR
     hosts.forEach(host => {
         const torId = hostToTorMap.get(host.id);
         if (torId) {
@@ -1827,10 +1774,10 @@ function positionHostsUnderToRs(hosts, tors, yPosition, totalNodes = 0) {
         }
     });
 
-    // Dynamic host spacing based on topology size
+    // Host spacing based on topology size
     let hostSpacing;
     if (totalNodes > 200) {
-        hostSpacing = 35; // Tighter spacing for large topologies
+        hostSpacing = 35; // Tighter for large topologies
     } else if (totalNodes > 100) {
         hostSpacing = 40;
     } else {
@@ -1842,7 +1789,7 @@ function positionHostsUnderToRs(hosts, tors, yPosition, totalNodes = 0) {
         const connectedHosts = torToHostsMap.get(tor.id) || [];
         if (connectedHosts.length === 0) return;
 
-        // Sort hosts numerically by ID for consistent ordering
+        // Sort numerically by ID
         connectedHosts.sort((a, b) => {
             const aNum = parseInt(a.id.match(/\d+/)[0] || 0);
             const bNum = parseInt(b.id.match(/\d+/)[0] || 0);
@@ -1850,10 +1797,10 @@ function positionHostsUnderToRs(hosts, tors, yPosition, totalNodes = 0) {
         });
 
         // Calculate host row arrangement
-        const maxHostsPerRow = Math.floor(hostSpacing > 40 ? 4 : 6); // More hosts per row for larger topologies
+        const maxHostsPerRow = Math.floor(hostSpacing > 40 ? 4 : 6);
 
         if (connectedHosts.length <= maxHostsPerRow) {
-            // Single row of hosts
+            // Single row
             const totalWidth = (connectedHosts.length - 1) * hostSpacing;
             const startX = tor.layoutX - totalWidth / 2;
 
@@ -1862,7 +1809,7 @@ function positionHostsUnderToRs(hosts, tors, yPosition, totalNodes = 0) {
                 host.layoutY = yPosition;
             });
         } else {
-            // Multiple rows of hosts
+            // Multiple rows
             const rows = Math.ceil(connectedHosts.length / maxHostsPerRow);
             const rowSpacing = 35;
 
@@ -1876,14 +1823,14 @@ function positionHostsUnderToRs(hosts, tors, yPosition, totalNodes = 0) {
 
                 host.layoutX = rowStartX + (col * hostSpacing);
 
-                // Center all rows vertically
+                // Center rows vertically
                 const totalHeight = (rows - 1) * rowSpacing;
                 host.layoutY = yPosition + (row * rowSpacing) - (totalHeight / 2);
             });
         }
     });
 
-    // Handle any unmapped hosts (shouldn't happen in a proper fat tree)
+    // Handle unmapped hosts
     const unmappedHosts = hosts.filter(host => !hostToTorMap.has(host.id));
     if (unmappedHosts.length > 0) {
         const unmappedY = Math.round((yPosition + 40) / gridSize) * gridSize;
@@ -1904,40 +1851,40 @@ function applyBinaryTreeLayout(graph) {
         levels[prefix].push(node);
     });
 
-    // Sort levels alphabetically (a, b, c, d) for top-down layout
+    // Sort levels (a, b, c, d) for top-down layout
     const sortedLevels = Object.keys(levels).sort();
 
-    // Calculate vertical distribution
+    // Calculate vertical spacing
     const levelCount = sortedLevels.length;
     const verticalSpacing = height / (levelCount + 1);
 
     // Position each level
     sortedLevels.forEach((level, levelIndex) => {
         const nodesInLevel = levels[level].sort((a, b) => {
-            // Extract numeric part for natural sorting
+            // Extract numeric part
             const aNum = parseInt(a.id.match(/\d+/)[0] || 0);
             const bNum = parseInt(b.id.match(/\d+/)[0] || 0);
             return aNum - bNum;
         });
 
-        // Pre-snap Y positions to grid for consistency
+        // Snap Y positions to grid
         const rawYPosition = (levelIndex + 1) * verticalSpacing;
         const yPosition = Math.round(rawYPosition / gridSize) * gridSize;
 
         positionNodesLinearly(nodesInLevel, width - 80, 40, yPosition);
     });
 
-    // Handle hosts separately if they exist
+    // Handle hosts separately
     const hosts = graph.nodes.filter(n => n.type === 'host');
     if (hosts.length > 0) {
-        // Position hosts at the bottom - pre-snap to grid
-        const rawHostLevelY = height * 0.9; // Bottom of the screen
+        // Position hosts at bottom
+        const rawHostLevelY = height * 0.9;
         const hostLevelY = Math.round(rawHostLevelY / gridSize) * gridSize;
 
-        // Group hosts by their connected switch
+        // Group hosts by connected switch
         const hostToSwitchMap = new Map();
 
-        // Find leaf nodes connected to each host
+        // Find connections
         graph.links.forEach(link => {
             const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
             const targetId = typeof link.target === 'object' ? link.target.id : link.target;
@@ -1950,7 +1897,7 @@ function applyBinaryTreeLayout(graph) {
             }
         });
 
-        // Build a reverse map (switch to hosts)
+        // Build switch-to-hosts map
         const switchToHostsMap = new Map();
         hostToSwitchMap.forEach((switchId, hostId) => {
             if (!switchToHostsMap.has(switchId)) {
@@ -1962,7 +1909,7 @@ function applyBinaryTreeLayout(graph) {
             }
         });
 
-        // Position hosts under their switches
+        // Position hosts under switches
         graph.nodes.forEach(node => {
             const connectedHosts = switchToHostsMap.get(node.id) || [];
             if (connectedHosts.length > 0) {
@@ -1976,31 +1923,31 @@ function applyBinaryTreeLayout(graph) {
             }
         });
 
-        // For any hosts not mapped to switches, position them linearly
+        // Handle unmapped hosts
         const unmappedHosts = hosts.filter(host => !hostToSwitchMap.has(host.id));
         positionNodesLinearly(unmappedHosts, width - 80, 40, hostLevelY);
     }
 }
 
-// Apply Linear layout for simple topologies
+// Apply Linear layout
 function applyLinearLayout(graph) {
-    // Identify different node types
+    // Identify node types
     const hosts = graph.nodes.filter(n => n.type === 'host');
     const switches = graph.nodes.filter(n => n.type !== 'host');
 
-    // Position switches in the middle - pre-snap to grid
+    // Position switches in middle
     const rawSwitchLayerY = height * 0.5;
     const switchLayerY = Math.round(rawSwitchLayerY / gridSize) * gridSize;
     positionNodesLinearly(switches, width - 80, 40, switchLayerY);
 
-    // Position hosts at the bottom - pre-snap to grid
+    // Position hosts at bottom
     const rawHostLayerY = height * 0.8;
     const hostLayerY = Math.round(rawHostLayerY / gridSize) * gridSize;
 
-    // Group hosts by their connected switch
+    // Group hosts by connected switch
     const hostToSwitchMap = new Map();
 
-    // Find switches connected to each host
+    // Find connections
     graph.links.forEach(link => {
         const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
         const targetId = typeof link.target === 'object' ? link.target.id : link.target;
@@ -2013,7 +1960,7 @@ function applyLinearLayout(graph) {
         }
     });
 
-    // Build a reverse map (switch to hosts)
+    // Build switch-to-hosts map
     const switchToHostsMap = new Map();
     hostToSwitchMap.forEach((switchId, hostId) => {
         if (!switchToHostsMap.has(switchId)) {
@@ -2025,11 +1972,11 @@ function applyLinearLayout(graph) {
         }
     });
 
-    // Position hosts under their switches
+    // Position hosts under switches
     switches.forEach(switchNode => {
         const connectedHosts = switchToHostsMap.get(switchNode.id) || [];
         if (connectedHosts.length > 0) {
-            const totalWidth = 120; // Space for hosts
+            const totalWidth = 120; 
             const spacing = totalWidth / (connectedHosts.length + 1);
 
             connectedHosts.forEach((host, index) => {
@@ -2039,7 +1986,7 @@ function applyLinearLayout(graph) {
         }
     });
 
-    // For any hosts not mapped to switches, position them linearly
+    // Handle unmapped hosts
     const unmappedHosts = hosts.filter(host => !hostToSwitchMap.has(host.id));
     positionNodesLinearly(unmappedHosts, width - 80, 40, hostLayerY);
 }
@@ -2050,14 +1997,14 @@ function applyForceDirectedLayout(graph) {
     const centerX = width / 2;
     const centerY = height / 2;
 
-    // Set initial positions randomly around the center
+    // Random initial positions
     graph.nodes.forEach(node => {
         node.layoutX = centerX + (Math.random() - 0.5) * width * 0.8;
         node.layoutY = centerY + (Math.random() - 0.5) * height * 0.8;
     });
 }
 
-// Evenly distribute nodes in a strict linear fashion
+// Position nodes linearly
 function positionNodesLinearly(nodes, availableWidth, startX, yPosition) {
     if (nodes.length === 0) return;
 
@@ -2068,26 +2015,26 @@ function positionNodesLinearly(nodes, availableWidth, startX, yPosition) {
         return;
     }
 
-    // Calculate spacing between nodes
+    // Calculate spacing
     const spacing = availableWidth / (nodes.length - 1);
 
-    // Position each node in a straight line
+    // Position each node in a line
     nodes.forEach((node, index) => {
         node.layoutX = startX + (spacing * index);
         node.layoutY = yPosition;
     });
 }
 
-// Build a map of hosts to their connected ToR switches
+// Build a map of hosts to their ToR switches
 function buildHostToTorMap(graph) {
     const hostToRackMap = new Map();
 
-    // Find ToR switches connected to each host
+    // Find ToR connections
     graph.links.forEach(link => {
         const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
         const targetId = typeof link.target === 'object' ? link.target.id : link.target;
 
-        // If link connects a host to a ToR switch
+        // Link between host and ToR
         if (sourceId.charAt(0) === 'h' &&
             (targetId.charAt(0) === 't' || targetId.charAt(0) === 'd')) {
             hostToRackMap.set(sourceId, targetId);
@@ -2101,49 +2048,49 @@ function buildHostToTorMap(graph) {
     return hostToRackMap;
 }
 
-// Export topology visualization as PNG or JPEG
+// Export topology as image
 function exportTopology(format) {
-    // Create a temporary white background for better image quality
+    // Add white background
     const tempBg = svg.insert('rect', ':first-child')
         .attr('width', '100%')
         .attr('height', '100%')
         .attr('fill', 'white');
 
-    // Get the SVG element and all its content
+    // Get SVG content
     const svgElement = document.querySelector('#graph-container svg');
     const svgData = new XMLSerializer().serializeToString(svgElement);
 
-    // Create a canvas to draw the SVG
+    // Canvas for drawing
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    // Get the actual size of the SVG
+    // Get SVG size
     const rect = svgElement.getBoundingClientRect();
-
-    // Set canvas size to match SVG viewport or use default size
+    
+    // Set canvas size
     canvas.width = rect.width || 1200;
     canvas.height = rect.height || 800;
 
-    // Create an image from SVG data
+    // Create image from SVG
     const img = new Image();
     const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);
 
     img.onload = function () {
-        // Fill canvas with white background
+        // Fill canvas with white
         ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Draw the SVG image on canvas
+        // Draw SVG on canvas
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
         // Convert to image format
         const imageFormat = format === 'jpeg' ? 'image/jpeg' : 'image/png';
-        const quality = format === 'jpeg' ? 0.95 : undefined; // Higher quality for JPEG
+        const quality = format === 'jpeg' ? 0.95 : undefined;
 
         const dataURL = canvas.toDataURL(imageFormat, quality);
 
-        // Create download link
+        // Download
         const link = document.createElement('a');
         link.download = `network-topology.${format}`;
         link.href = dataURL;
@@ -2163,31 +2110,31 @@ function exportTopology(format) {
     img.src = url;
 }
 
-// Reset the view by reloading the current topology
+// Reset view
 function resetView() {
     if (!currentTopology || !graph) return;
 
-    // Simply reload the current topology to reset everything
+    // Reload the topology
     loadTopology(currentTopology);
 
-    // Show a brief visual feedback to indicate the reset
+    // Visual feedback
     const button = document.querySelector('#reset-view-btn button');
     const originalText = button.textContent;
     button.textContent = 'Reset Complete';
     button.style.backgroundColor = '#4CAF50';
 
-    // Restore the button after a short delay
+    // Restore the button
     setTimeout(() => {
         button.textContent = originalText;
         button.style.backgroundColor = '';
     }, 1000);
 }
 
-// Auto-zoom to fit the entire topology on screen with efficient space usage
+// Auto-zoom to fit the topology
 function autoZoomToFit(graph) {
     if (!graph || graph.nodes.length === 0) return;
 
-    // Calculate the actual bounding box of all nodes
+    // Calculate bounding box
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
     graph.nodes.forEach(node => {
@@ -2197,11 +2144,11 @@ function autoZoomToFit(graph) {
         maxY = Math.max(maxY, node.y || 0);
     });
 
-    // For fat trees, check if we need special handling
+    // Check for fat tree special handling
     if (currentLayout === 'fattree') {
         const hostCount = graph.nodes.filter(n => n.type === 'host').length;
 
-        // Check actual width of hosts
+        // Check host width
         const hosts = graph.nodes.filter(n => n.type === 'host');
         let hostMinX = Infinity, hostMaxX = -Infinity;
         hosts.forEach(host => {
@@ -2209,38 +2156,37 @@ function autoZoomToFit(graph) {
             hostMaxX = Math.max(hostMaxX, host.x || 0);
         });
 
-        // Calculate actual host width
+        // Actual host width
         const actualHostWidth = hostMaxX - hostMinX;
 
-        // Calculate padding based on topology size and screen width
-        let basepadding;
+        // Padding based on size
+        let padding;
         if (hostCount > 128) {
-            basepadding = Math.min(50, width * 0.05); // 5% of screen width or 50px, whichever is smaller
+            padding = Math.min(50, width * 0.05);
         } else if (hostCount > 64) {
-            basepadding = Math.min(80, width * 0.08); // 8% of screen width  
+            padding = Math.min(80, width * 0.08);
         } else {
-            basepadding = Math.min(100, width * 0.1); // 10% of screen width
+            padding = Math.min(100, width * 0.1);
         }
 
-        // Use the actual bounding box plus modest padding
-        minX -= basepadding;
-        minY -= basepadding;
-        maxX += basepadding;
-        maxY += basepadding;
+        // Apply padding
+        minX -= padding;
+        minY -= padding;
+        maxX += padding;
+        maxY += padding;
 
-        // Ensure we don't zoom out too far for large topologies
+        // Calculate scale
         const graphWidth = maxX - minX;
         const graphHeight = maxY - minY;
-
         const scaleX = width / graphWidth;
         const scaleY = height / graphHeight;
-        const scale = Math.min(scaleX, scaleY, 1.2); // Cap scale at 1.2 to avoid zooming in too much
+        const scale = Math.min(scaleX, scaleY, 1.2);
 
-        // Calculate center
+        // Center
         const centerX = (minX + maxX) / 2;
         const centerY = (minY + maxY) / 2;
 
-        // Apply the zoom transform without animation
+        // Apply transform
         svg.call(
             svg.zoom.transform,
             d3.zoomIdentity
@@ -2249,26 +2195,25 @@ function autoZoomToFit(graph) {
                 .translate(-centerX, -centerY)
         );
     } else {
-        // For other layouts, use standard padding
+        // Standard padding
         const padding = 60;
         minX -= padding;
         minY -= padding;
         maxX += padding;
         maxY += padding;
 
-        // Calculate the required scale to fit the graph
+        // Calculate scale
         const graphWidth = maxX - minX;
         const graphHeight = maxY - minY;
-
         const scaleX = width / graphWidth;
         const scaleY = height / graphHeight;
-        const scale = Math.min(scaleX, scaleY, 2); // Limit max scale to 2x
+        const scale = Math.min(scaleX, scaleY, 2);
 
-        // Calculate the center of the graph
+        // Center
         const centerX = (minX + maxX) / 2;
         const centerY = (minY + maxY) / 2;
 
-        // Apply the zoom transform without animation
+        // Apply transform
         svg.call(
             svg.zoom.transform,
             d3.zoomIdentity
@@ -2279,7 +2224,7 @@ function autoZoomToFit(graph) {
     }
 }
 
-// Show node details in the details panel
+// Show node details
 function showNodeDetails(node) {
     const detailsPanel = document.getElementById('details-panel');
     const nodeTypeMap = {
@@ -2294,7 +2239,7 @@ function showNodeDetails(node) {
     html += `<p><strong>Type:</strong> ${nodeTypeMap[node.type] || node.type}</p>`;
     html += `<p><strong>Position:</strong> Grid (${Math.round(node.x / gridSize)}, ${Math.round(node.y / gridSize)})</p>`;
 
-    // Show configuration properties
+    // Config properties
     html += `<p><strong>Configuration:</strong></p>`;
     if (Object.keys(node.config).length === 0) {
         html += `<p>No specific configuration.</p>`;
@@ -2302,7 +2247,7 @@ function showNodeDetails(node) {
         html += `<pre>${JSON.stringify(node.config, null, 2)}</pre>`;
     }
 
-    // Show connected links with port information
+    // Connected links 
     html += `<p><strong>Connected Links:</strong></p>`;
     const connectedLinks = graph.links.filter(link => {
         const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
@@ -2319,7 +2264,7 @@ function showNodeDetails(node) {
             const targetId = typeof link.target === 'object' ? link.target.id : link.target;
             const otherEnd = sourceId === node.id ? targetId : sourceId;
 
-            // Get type of the other end
+            // Get other end type
             const otherNode = graph.nodes.find(n => n.id === otherEnd);
             const otherType = otherNode ? nodeTypeMap[otherNode.type] || otherNode.type : 'unknown';
 
@@ -2333,7 +2278,7 @@ function showNodeDetails(node) {
                 otherPort = link.sourcePort;
             }
 
-            // Format bandwidth properties
+            // Format bandwidth
             let bandwidth = '';
             if (link.properties && link.properties.bw) {
                 bandwidth = ` (Bandwidth: ${link.properties.bw} Mbps)`;
@@ -2347,7 +2292,7 @@ function showNodeDetails(node) {
     detailsPanel.innerHTML = html;
 }
 
-// Show link details in the details panel
+// Show link details
 function showLinkDetails(link) {
     const detailsPanel = document.getElementById('details-panel');
     const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
@@ -2372,14 +2317,14 @@ function showLinkDetails(link) {
     html += `<p><strong>Connection:</strong> ${sourceId} (${sourceType}) ↔ ${targetId} (${targetType})</p>`;
     html += `<p><strong>Ports:</strong> ${sourceId}:${link.sourcePort} ↔ ${targetId}:${link.targetPort}</p>`;
 
-    // Show bandwidth if available
+    // Bandwidth info
     if (link.properties && link.properties.bw) {
         html += `<p><strong>Bandwidth:</strong> ${link.properties.bw} Mbps</p>`;
     } else {
         html += `<p><strong>Bandwidth:</strong> Default</p>`;
     }
 
-    // Show any other properties
+    // Other properties
     if (link.properties && Object.keys(link.properties).length > 0) {
         html += `<p><strong>Properties:</strong></p>`;
         html += `<pre>${JSON.stringify(link.properties, null, 2)}</pre>`;
@@ -2388,7 +2333,7 @@ function showLinkDetails(link) {
     detailsPanel.innerHTML = html;
 }
 
-// Update topology information in the sidebar
+// Update topology information
 function updateTopologyInfo(topology, graph) {
     const topologyInfo = document.getElementById('topology-info');
     const propertiesInfo = document.getElementById('properties-info');
@@ -2420,13 +2365,13 @@ function updateTopologyInfo(topology, graph) {
         <p><strong>Topology Type:</strong> ${topologyType}</p>
     `;
 
-    // Add counts for each node type
+    // Node type counts
     for (const type in nodeTypes) {
         const displayType = type.charAt(0).toUpperCase() + type.slice(1); // Capitalize
         topologyHtml += `<p><strong>${displayType}s:</strong> ${nodeTypes[type]}</p>`;
     }
 
-    // Add link count
+    // Link count
     topologyHtml += `<p><strong>Links:</strong> ${topology.links.length}</p>`;
 
     topologyInfo.innerHTML = topologyHtml;
@@ -2437,7 +2382,7 @@ function updateTopologyInfo(topology, graph) {
         <p><strong>Default Queue Length:</strong> ${topology.default_queue_length !== undefined ? topology.default_queue_length : 'N/A'}</p>
     `;
 
-    // Add any additional properties
+    // Additional properties
     const additionalProps = ['p4_src', 'switch', 'compiler', 'pcap_dump', 'enable_log'];
     additionalProps.forEach(prop => {
         if (topology[prop] !== undefined) {
@@ -2454,12 +2399,11 @@ function dragstarted(event, d) {
     if (!event.active) simulation.alphaTarget(0.3).restart();
     d.fx = d.x;
     d.fy = d.y;
-    d.isDragging = true; // Set a flag that this node is being dragged
+    d.isDragging = true;
 }
 
 function dragged(event, d) {
     if (snapToGrid) {
-        // Snap to grid when dragging
         d.fx = Math.round(event.x / gridSize) * gridSize;
         d.fy = Math.round(event.y / gridSize) * gridSize;
     } else {
@@ -2471,19 +2415,15 @@ function dragged(event, d) {
 function dragended(event, d) {
     if (!event.active) simulation.alphaTarget(0);
 
-    // Keep the node fixed at its final position
     if (snapToGrid) {
-        // Ensure it's properly snapped to grid
         d.x = Math.round(d.x / gridSize) * gridSize;
         d.y = Math.round(d.y / gridSize) * gridSize;
-        // Keep node fixed at the snapped position
         d.fx = d.x;
         d.fy = d.y;
     } else {
-        // Keep node fixed at its last position
         d.fx = d.x;
         d.fy = d.y;
     }
-
-    d.isDragging = false; // Clear the dragging flag
+    
+    d.isDragging = false;
 }
