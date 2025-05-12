@@ -153,6 +153,71 @@ document.addEventListener('DOMContentLoaded', () => {
         <p>You can add new nodes using the Add Node panel.</p>
     `;
     }
+
+    document.getElementById('remove-links-btn').addEventListener('click', removeAllLinks);
+
+    // Removes all links
+    function removeAllLinks() {
+        if (!currentTopology) {
+            alert('No topology loaded.');
+            return;
+        }
+
+        if (currentTopology.links.length === 0) {
+            alert('There are no links to remove.');
+            return;
+        }
+
+        const confirmRemove = confirm('Are you sure you want to remove all links? This will maintain your node positions but delete all connections.');
+        if (!confirmRemove) return;
+
+        // Store positions of all nodes
+        const nodePositions = {};
+        graph.nodes.forEach(node => {
+            nodePositions[node.id] = {
+                x: node.x,
+                y: node.y,
+                fx: node.fx,
+                fy: node.fy
+            };
+        });
+
+        // Clear all links but keep nodes
+        currentTopology.links = [];
+
+        // Rebuild the graph without links
+        graph.links = [];
+
+        // Reset ports for all nodes since links are gone
+        graph.nodes.forEach(node => {
+            node.ports = {};
+        });
+
+        // Restore positions for all nodes
+        graph.nodes.forEach(node => {
+            if (nodePositions[node.id]) {
+                node.x = nodePositions[node.id].x;
+                node.y = nodePositions[node.id].y;
+                node.fx = nodePositions[node.id].fx;
+                node.fy = nodePositions[node.id].fy;
+            }
+        });
+
+        // Update UI
+        updateTopologyInfo(currentTopology, graph);
+        visualizeGraph(graph);
+
+        // Clear any selection
+        selectedNode = null;
+        selectedLink = null;
+
+        // Update details panel
+        document.getElementById('details-panel').innerHTML = `
+        <h3>Links Removed</h3>
+        <p>All links have been removed. Node positions have been preserved.</p>
+        <p>You can add new links using the Add Link panel.</p>
+    `;
+    }
 });
 
 // New: Function to handle network configuration updates

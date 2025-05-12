@@ -158,6 +158,14 @@ pre {
     background-color: #b71c1c;
 }
 
+/* Remove links button */
+#remove-links-btn {
+    background-color: #ff5722;
+}
+#remove-links-btn:hover {
+    background-color: #e64a19;
+}
+
 /* Clear all button */
 #clear-all-btn {
     background-color: #e91e63;
