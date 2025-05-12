@@ -72,10 +72,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('auto-arp').addEventListener('change', updateNetworkConfig);
     document.getElementById('queue-length').addEventListener('change', updateNetworkConfig);
 
-    // Reset view button
+    // Format view button
     const resetViewBtn = document.createElement('button');
     resetViewBtn.id = 'reset-view-btn';
-    resetViewBtn.textContent = 'Reset View';
+    resetViewBtn.textContent = 'Format View';
     resetViewBtn.addEventListener('click', resetView);
     document.getElementById('reset-view-btn').appendChild(resetViewBtn);
 
@@ -273,7 +273,6 @@ function createLayoutSelector() {
 
     layoutSelect.addEventListener('change', (e) => {
         const selectedLayout = e.target.value;
-
         // Auto Detect logic
         if (selectedLayout === 'auto' && graph) {
             const detectedType = detectTopologyType(graph, currentTopology);
@@ -285,7 +284,6 @@ function createLayoutSelector() {
         } else {
             currentLayout = selectedLayout;
         }
-
         // Redraw the graph with the new layout
         if (graph) {
             visualizeGraph(graph);
@@ -339,12 +337,12 @@ function createDefaultTopology() {
 function handleFileUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
             const data = JSON.parse(e.target.result);
             currentLayout = 'auto'; // Reset to auto-detect for new files
+            graph = null;
             loadTopology(data);
         } catch (error) {
             alert('Error parsing JSON file: ' + error.message);
@@ -2110,24 +2108,22 @@ function exportTopology(format) {
     img.src = url;
 }
 
-// Reset view
+// Format view
 function resetView() {
-    if (!currentTopology || !graph) return;
+    if (!currentTopology) return;
 
-    // Reload the topology
-    loadTopology(currentTopology);
+    // Forget every runtime position so the layout code starts fresh
+    graph = null;                 // prevents loadTopology() from caching old coords
+    loadTopology(structuredClone(currentTopology));   // deep-clone to avoid mutation
 
-    // Visual feedback
-    const button = document.querySelector('#reset-view-btn button');
-    const originalText = button.textContent;
-    button.textContent = 'Reset Complete';
-    button.style.backgroundColor = '#4CAF50';
+    // optional zoom-to-fit for good measure
+    autoZoomToFit(graph);
 
-    // Restore the button
-    setTimeout(() => {
-        button.textContent = originalText;
-        button.style.backgroundColor = '';
-    }, 1000);
+    // UI feedback
+    const btn = document.querySelector('#reset-view-btn button');
+    btn.textContent = 'Format Complete';
+    btn.style.backgroundColor = '#4CAF50';
+    setTimeout(() => { btn.textContent = 'Format View'; btn.style.backgroundColor = ''; }, 1000);
 }
 
 // Auto-zoom to fit the topology
