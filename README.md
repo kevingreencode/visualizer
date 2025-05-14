@@ -51,7 +51,7 @@ No server-side components or build steps required - this is a pure HTML/CSS/Java
 - **Zoom**: Use mouse wheel or trackpad gestures
 - **Move Nodes**: Drag individual nodes to reposition them
 - **View Details**: Click on any node to see its configuration and connections
-- **Reset View**: Click "Reset View" to restore the original visualization
+- **Format View**: Click "Format View" to format the visualization
 
 ### Customizing the Display
 
