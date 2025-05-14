@@ -1,6 +1,6 @@
 # Network Topology Visualizer
 
-A powerful web-based tool for visualizing and interacting with network topology files. This visualizer automatically detects and renders different types of network topologies, including Fat Trees, Binary Trees, and more.
+A powerful web-based tool for visualizing, creating, and editing network topology files. This visualizer automatically detects and renders different types of network topologies, including Fat Trees, Binary Trees, and more.
 
 ![Network Topology Visualizer](https://raw.githubusercontent.com/kevingreencode/visualizer/refs/heads/main/sample.png)
 
@@ -9,11 +9,14 @@ A powerful web-based tool for visualizing and interacting with network topology 
 - **Automatic Topology Detection**: Intelligently identifies topology types (Fat Tree, Binary Tree, Linear, etc.)
 - **Multiple Layout Algorithms**: Optimized visualization for different network architectures
 - **Interactive Interface**: Drag, zoom, and click nodes to inspect network elements
+- **Network Builder**: Add, remove, and connect nodes without writing any JSON
 - **Bandwidth Visualization**: Shows bandwidth information on links when available
-- **Grid System**: Snap-to-grid functionality for clean, organized layouts
+- **Grid System**: Snap-to-grid functionality with adjustable grid size for clean, organized layouts
 - **Customizable View**: Toggle labels, grid lines, and adjust display settings
 - **Detailed Information**: View comprehensive node configuration and connection details
 - **Port Information**: Shows connection port numbers for each link
+- **Export Options**: Save your topology as PNG, JPEG, or JSON
+- **Network Configuration**: Customize assignment strategy, ARP tables, and queue length
 
 ## Installation
 
@@ -45,21 +48,51 @@ No server-side components or build steps required - this is a pure HTML/CSS/Java
 2. Select a JSON topology file
 3. The system will automatically detect the topology type and display it using the most appropriate layout
 
+### Creating a Topology
+
+1. **Add Nodes**:
+   - Enter a node ID in the "Node ID" field (follow naming conventions: h for hosts, t for ToR switches, etc.)
+   - Select the node type from the dropdown
+   - Click "Add Node"
+
+2. **Add Links**:
+   - Select source and target nodes from the dropdowns
+   - Optionally set bandwidth (in Mbps)
+   - Click "Add Link"
+
+3. **Remove Elements**:
+   - Click on a node or link to select it
+   - Click "Remove Selected" to delete it
+   - Use "Remove Links" to clear all connections while keeping nodes
+   - Use "Clear All" to remove everything and start over
+
+### Network Configuration
+
+- **Assignment Strategy**: Choose between L2 and L3
+- **Auto ARP Tables**: Toggle automatic ARP table generation
+- **Default Queue Length**: Set the default queue length for the network
+
 ### Interacting with the Visualization
 
 - **Pan**: Click and drag on empty space
 - **Zoom**: Use mouse wheel or trackpad gestures
 - **Move Nodes**: Drag individual nodes to reposition them
-- **View Details**: Click on any node to see its configuration and connections
-- **Format View**: Click "Format View" to format the visualization
+- **View Details**: Click on any node or link to see its configuration and connections
+- **Format View**: Click "Format View" to reset layout while maintaining topology structure
 
 ### Customizing the Display
 
 - **Toggle Labels**: Show/hide node and bandwidth labels
 - **Toggle Grid**: Show/hide the background grid
 - **Change Layout**: Select a different algorithm from the layout dropdown
-- **Adjust Grid Size**: Use the slider to change grid granularity
+- **Adjust Grid Size**: Use the slider to change grid granularity (20px-100px)
 - **Snap to Grid**: Toggle grid snapping for precise alignment
+
+### Exporting Your Work
+
+- **Export as PNG**: Save the visualization as a PNG image
+- **Export as JPEG**: Save the visualization as a JPEG image
+- **Export as JSON**: Save the topology configuration as a JSON file (for later import)
 
 ## Supported Topology Types
 
@@ -70,7 +103,10 @@ Optimized for hierarchical datacenter topologies with core, aggregate, and top-o
   "topology": {
     "links": [["c1", "a1"], ["a1", "t1"], ["t1", "h1"]],
     "hosts": { "h1": {} },
-    "switches": { "c1": {}, "a1": {}, "t1": {} }
+    "switches": { "c1": {}, "a1": {}, "t1": {} },
+    "assignment_strategy": "l3",
+    "auto_arp_tables": true,
+    "default_queue_length": 100
   }
 }
 ```
@@ -104,6 +140,12 @@ A fallback layout for custom or complex topologies that don't match standard pat
 
 ## Configuration Options
 
+### Network Configuration
+
+- **Assignment Strategy**: Choose between L2 and L3 network protocols
+- **Auto ARP Tables**: When enabled, ARP tables are automatically generated
+- **Default Queue Length**: Specify the default queue length for all links
+
 ### Grid Settings
 
 - **Grid Size**: Controls the spacing between grid lines (20px-100px)
@@ -115,7 +157,7 @@ A fallback layout for custom or complex topologies that don't match standard pat
 - **Fat Tree**: Forces the fat tree layout algorithm
 - **Binary Tree**: Forces the binary tree layout algorithm
 - **Linear**: Forces the linear layout algorithm
-- **Force-Directed**: Uses a physics-based layout for custom topologies
+- **Force-Directed (Ugliness)**: Uses a physics-based layout for custom topologies
 
 ## Node Types and Colors
 
@@ -136,6 +178,8 @@ The visualizer is built using a modular architecture with the following core com
 - **Layout Engine**: Implements multiple layout algorithms for different topology types
 - **Rendering Engine**: Handles SVG-based visualization using D3.js
 - **Interaction System**: Manages user inputs (drag, zoom, click) and updates
+- **Network Builder**: Handles the creation and modification of topology elements
+- **Export System**: Manages various export formats (PNG, JPEG, JSON)
 
 ### Core Technologies
 
@@ -167,8 +211,10 @@ The visualizer is built using a modular architecture with the following core com
 #### 1. Data Flow
 
 ```javascript
-// 1. Topology Loading
+// 1. Topology Loading or Creation
 handleFileUpload() → loadTopology() → buildGraph()
+addNewNode() → updateTopologyInfo() → addNodeToVisualization()
+addNewLink() → updateTopologyInfo() → addLinkToVisualization()
 
 // 2. Layout Calculation
 applyFatTreeLayout() / applyBinaryTreeLayout() / etc.
@@ -178,6 +224,10 @@ visualizeGraph() → SVG Updates
 
 // 4. User Interaction
 dragstarted() → dragged() → dragended()
+showNodeDetails() / showLinkDetails()
+
+// 5. Export
+exportTopologyAsJson() / exportTopology('png') / exportTopology('jpeg')
 ```
 
 #### 2. Key Function Overview
@@ -202,6 +252,15 @@ dragstarted() → dragged() → dragended()
 - Analyzes node naming patterns and structure
 - Uses priority-based algorithm to classify topology type
 - Returns appropriate layout strategy
+
+**`addNewNode()` / `addNewLink()`**
+- Validates user input for node/link creation
+- Updates topology data structures
+- Integrates new elements into visualization
+
+**`showNodeDetails()` / `showLinkDetails()`**
+- Displays detailed information about selected elements
+- Shows configuration, port numbers, and connection details
 
 **Force Simulation Functions**
 ```javascript
@@ -233,21 +292,39 @@ d3.forceSimulation(graph.nodes)
    ```javascript
    // Add icon backgrounds
    nodeGroup.append('circle')
+       .attr('class', 'node')
        .attr('r', 14)
        .attr('fill', getNodeColor);
    
    // Add custom icons
    nodeGroup.append('path')
-       .attr('d', getIconPath)
+       .attr('d', icon.path)
+       .attr('class', 'node-icon')
        .attr('fill', '#ffffff');
    ```
 
 4. **Animation Loop**: Update positions every frame
    ```javascript
    simulation.on('tick', () => {
-       nodes.attr('transform', d => `translate(${d.x},${d.y})`);
-       links.attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y);
+       // Update positions with grid snapping if enabled
+       if (snapToGrid) {
+           graph.nodes.forEach(d => {
+               if (!d.isDragging) {
+                   d.x = Math.round(d.x / gridSize) * gridSize;
+                   d.y = Math.round(d.y / gridSize) * gridSize;
+               }
+           });
+       }
+       
+       // Update visual elements
+       link
+           .attr('x1', d => d.source.x)
+           .attr('y1', d => d.source.y)
+           .attr('x2', d => d.target.x)
+           .attr('y2', d => d.target.y);
+           
+       nodeGroup
+           .attr('transform', d => `translate(${d.x}, ${d.y})`);
    });
    ```
 
@@ -257,10 +334,26 @@ d3.forceSimulation(graph.nodes)
 
 ```javascript
 function detectTopologyType(graph, topology) {
+    // Count node types and prefixes
+    const nodeTypeCount = {};
+    const prefixCounts = {};
+    
+    graph.nodes.forEach(node => {
+        nodeTypeCount[node.type] = (nodeTypeCount[node.type] || 0) + 1;
+        const prefix = node.id.charAt(0);
+        prefixCounts[prefix] = (prefixCounts[prefix] || 0) + 1;
+    });
+
     // Priority-based detection
     if (prefixCounts['b']) return 'binary';  // Binary trees have unique 'b' prefix
-    if (hasFatTreeStructure()) return 'fattree';  // Core/Aggregate/ToR structure
-    if (isLinearTopology()) return 'linear';  // Simple linear connections
+    
+    const hasFatTreeNaming = (prefixCounts['c'] && prefixCounts['a'] && prefixCounts['t']) ||
+        (nodeTypeCount['core'] && nodeTypeCount['aggregate'] && nodeTypeCount['tor']);
+    if (hasFatTreeNaming) return 'fattree';
+    
+    const hasSimpleNaming = prefixCounts['s'] && prefixCounts['s'] < 10;
+    if (hasSimpleNaming) return 'linear';
+    
     return 'force';  // Fallback to force-directed
 }
 ```
@@ -271,33 +364,126 @@ function detectTopologyType(graph, topology) {
 - Calculates horizontal layers for core, aggregate, and ToR switches
 - Uses mathematical spacing to organize nodes in strict linear patterns
 - Groups hosts under their connected ToR switches
+- Adapts spacing based on topology size
 
 **Binary Tree Layout**:
 - Extracts hierarchy levels based on node naming conventions (a, b, c, d)
 - Organizes levels vertically with mathematical spacing
 - Positions nodes horizontally within each level
 
+**Linear Layout**:
+- Arranges switches in a horizontal line
+- Places hosts connected to each switch below them
+- Maintains consistent vertical spacing
+
 **Force-Directed Layout**:
 - Uses D3's force simulation with multiple forces (link, charge, center)
 - Applies spring and repulsion forces for natural positioning
 - Allows dynamic adjustment based on network density
 
-#### 3. Icon Rendering System
+#### 3. Node Management System
 
 ```javascript
-// SVG Icon Definitions
-const svgIcons = {
-    host: {
-        path: 'M2,2 v16 h20 v-16 z...',  // Server/computer shape
-        viewBox: '0 0 24 24',
-        size: 24
-    },
-    switch: {
-        path: 'M2,6 v12 h20 v-12 z...',  // Network switch shape
-        viewBox: '0 0 24 24',
-        size: 24
+// Add a new node to the topology
+function addNewNode() {
+    const nodeId = document.getElementById('node-id').value.trim();
+    const nodeType = document.getElementById('node-type').value;
+    
+    // Validation checks
+    if (!nodeId) {
+        alert('Please enter a node ID.');
+        return;
     }
-};
+    
+    // Check if ID already exists
+    if (graph.nodes.some(node => node.id === nodeId)) {
+        alert(`Node with ID "${nodeId}" already exists.`);
+        return;
+    }
+    
+    // Add to topology data
+    if (nodeType === 'host') {
+        if (!currentTopology.hosts) currentTopology.hosts = {};
+        currentTopology.hosts[nodeId] = {};
+    } else {
+        if (!currentTopology.switches) currentTopology.switches = {};
+        currentTopology.switches[nodeId] = {};
+    }
+    
+    // Create node object
+    const newNode = {
+        id: nodeId,
+        type: nodeType,
+        config: {},
+        ports: {}
+    };
+    
+    // Assign position
+    newNode.x = graph.lastDropPos.x;
+    newNode.y = graph.lastDropPos.y;
+    newNode.fx = newNode.x;
+    newNode.fy = newNode.y;
+    
+    // Update graph
+    graph.nodes.push(newNode);
+    updateNodeDropdowns();
+    addNodeToVisualization(newNode);
+}
+```
+
+#### 4. Export System
+
+```javascript
+// Export topology as image
+function exportTopology(format) {
+    // Add white background
+    const tempBg = svg.insert('rect', ':first-child')
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .attr('fill', 'white');
+        
+    // Get SVG content
+    const svgData = new XMLSerializer().serializeToString(svgElement);
+    
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    
+    // Draw SVG to canvas
+    const img = new Image();
+    img.onload = function() {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // Convert to image format
+        const dataURL = canvas.toDataURL(format === 'jpeg' ? 'image/jpeg' : 'image/png');
+        
+        // Download
+        const link = document.createElement('a');
+        link.download = `network-topology.${format}`;
+        link.href = dataURL;
+        link.click();
+    };
+    
+    img.src = URL.createObjectURL(new Blob([svgData], {type: 'image/svg+xml'}));
+}
+
+// Export topology as JSON
+function exportTopologyAsJson() {
+    const jsonData = { topology: currentTopology };
+    const jsonString = JSON.stringify(jsonData, null, 2);
+    
+    // Create download link
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'network-topology.json';
+    link.click();
+}
 ```
 
 ### Data Structures
@@ -310,7 +496,9 @@ const svgIcons = {
     config: {},      // Custom configuration from topology
     ports: {},       // Port number assignments
     x, y: number,    // Current position
-    layoutX, layoutY: number  // Calculated layout position
+    fx, fy: number,  // Fixed position (when dragged)
+    layoutX, layoutY: number,  // Calculated layout position
+    isDragging: boolean        // Flag for dragging state
 }
 ```
 
@@ -337,29 +525,50 @@ The visualizer implements a sequential port assignment system:
 4. Port information is displayed in the node details panel
 
 ```javascript
-// Port assignment during graph building
-const nodePortCounters = {};
-topology.links.forEach(link => {
-    const sourcePort = nodePortCounters[sourceId]++;
-    const targetPort = nodePortCounters[targetId]++;
-    // Store in link and node objects
-});
+// Get next available port number
+function getNextPortNumber(nodeId) {
+    const node = graph.nodes.find(n => n.id === nodeId);
+    if (!node) return 1;
+    
+    // Get used port numbers
+    const usedPorts = Object.values(node.ports);
+    if (usedPorts.length === 0) return 1;
+    
+    // Next available port number
+    return Math.max(...usedPorts) + 1;
+}
 ```
 
-### Grid and Snapping System
+### Grid System
 
-- Implements a customizable grid overlay
+- Implements a customizable grid overlay with adjustable size
 - Supports snap-to-grid functionality for precise node positioning
-- Grid size is adjustable from 20px to 100px
-- Snapping occurs during drag operations and layout calculations
+- Grid size is adjustable from 20px to 100px via slider
+- Visual grid can be toggled on/off independently of snapping behavior
 
 ```javascript
-// Grid snapping during drag
-function dragged(event, d) {
-    if (snapToGrid) {
-        d.fx = Math.round(event.x / gridSize) * gridSize;
-        d.fy = Math.round(event.y / gridSize) * gridSize;
+// Update grid when size changes
+function updateGrid() {
+    // Clear existing grid
+    svg.select('.grid').selectAll('*').remove();
+    const gridGroup = svg.select('.grid');
+    
+    // Calculate number of lines
+    const numHorizontalLines = Math.floor(height / gridSize);
+    const numVerticalLines = Math.floor(width / gridSize);
+    
+    // Draw grid lines
+    for (let i = 0; i <= numHorizontalLines; i++) {
+        gridGroup.append('line')
+            .attr('class', 'grid-line')
+            .attr('x1', 0)
+            .attr('y1', i * gridSize)
+            .attr('x2', width)
+            .attr('y2', i * gridSize)
+            .style('display', showGrid ? 'block' : 'none');
     }
+    
+    // Similar for vertical lines...
 }
 ```
 
@@ -369,28 +578,21 @@ function dragged(event, d) {
 - **Event Delegation**: Minimizes event listener overhead
 - **Simulation Optimization**: Configurable alpha decay for faster settling
 - **Selective Redrawing**: Only updates changed elements during interactions
+- **Position Caching**: Preserves manual node positions during topology updates
 
 ### State Management
 
 The application maintains global state for:
-- Current topology data
-- Selected layout type
+- Current topology data and graph structure
+- Selected layout type and detection information
 - UI settings (labels, grid, snap-to-grid)
 - Node positions and force simulation parameters
-
-### Extensibility
-
-The modular design allows for easy extension:
-- New layout algorithms can be added to the layout engine
-- Custom node types and icons can be defined in the SVG definitions
-- Additional topology detection patterns can be added to the detection engine
-- New interaction modes can be integrated through the event system
+- Selection state (selected node/link)
+- Network configuration (assignment strategy, auto ARP, queue length)
 
 ## Project Structure
 
-- `index.html` - Main HTML file
-- `styles.css` - CSS styling
-- `script.js` - JavaScript code for the visualizer
+- `index.html` - Main HTML file with embedded CSS and JavaScript
 - `examples/` - Sample topology files
 
 ## Contributing
